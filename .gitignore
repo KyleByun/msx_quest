@@ -1,0 +1,10 @@
+# 빌드 결과물. 다만 완성된 롬은 바로 받아 볼 수 있게 남긴다.
+build/*
+!build/game.rom
+!build/quest.rom
+
+__pycache__/
+*.pyc
+
+# 소스 전체를 묶어 둔 압축본. 저장소 자체와 중복이다.
+full_src.zip

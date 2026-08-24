@@ -1,0 +1,14 @@
+# 줄바꿈은 저장소에 LF 로 저장하고, PowerShell 스크립트만 CRLF 로 꺼낸다.
+# .ps1 은 UTF-8 BOM 이 있어야 PowerShell 5.1 이 한글 주석을 제대로 읽는다.
+* text=auto
+*.ps1 text eol=crlf
+*.asm text eol=lf
+*.md  text eol=lf
+*.py  text eol=lf
+*.tcl text eol=lf
+
+# 이진 파일은 손대지 않는다.
+*.rom binary
+*.bin binary
+*.png binary
+*.zip binary

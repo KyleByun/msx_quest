@@ -1,0 +1,284 @@
+{
+ "races": [
+  {
+   "name": "Human",
+   "mods": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "speed": 30
+  },
+  {
+   "name": "Dwarf",
+   "mods": [
+    0,
+    0,
+    2,
+    0,
+    0,
+    -2
+   ],
+   "speed": 20
+  },
+  {
+   "name": "Elf",
+   "mods": [
+    0,
+    2,
+    -2,
+    0,
+    0,
+    0
+   ],
+   "speed": 30
+  },
+  {
+   "name": "Gnome",
+   "mods": [
+    -2,
+    0,
+    2,
+    0,
+    0,
+    0
+   ],
+   "speed": 20
+  },
+  {
+   "name": "Half-Elf",
+   "mods": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "speed": 30
+  },
+  {
+   "name": "Half-Orc",
+   "mods": [
+    2,
+    0,
+    0,
+    -2,
+    0,
+    -2
+   ],
+   "speed": 30
+  },
+  {
+   "name": "Halfling",
+   "mods": [
+    -2,
+    2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "speed": 20
+  }
+ ],
+ "classes": [
+  {
+   "name": "Barbarian",
+   "hit_die": 12,
+   "bab": "good"
+  },
+  {
+   "name": "Bard",
+   "hit_die": 6,
+   "bab": "average"
+  },
+  {
+   "name": "Cleric",
+   "hit_die": 8,
+   "bab": "average"
+  },
+  {
+   "name": "Druid",
+   "hit_die": 8,
+   "bab": "average"
+  },
+  {
+   "name": "Fighter",
+   "hit_die": 10,
+   "bab": "good"
+  },
+  {
+   "name": "Monk",
+   "hit_die": 8,
+   "bab": "average"
+  },
+  {
+   "name": "Paladin",
+   "hit_die": 10,
+   "bab": "good"
+  },
+  {
+   "name": "Ranger",
+   "hit_die": 8,
+   "bab": "good"
+  },
+  {
+   "name": "Rogue",
+   "hit_die": 6,
+   "bab": "average"
+  },
+  {
+   "name": "Sorcerer",
+   "hit_die": 4,
+   "bab": "poor"
+  },
+  {
+   "name": "Wizard",
+   "hit_die": 4,
+   "bab": "poor"
+  }
+ ],
+ "bab": {
+  "good": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20
+  ],
+  "average": [
+   0,
+   0,
+   1,
+   2,
+   3,
+   3,
+   4,
+   5,
+   6,
+   6,
+   7,
+   8,
+   9,
+   9,
+   10,
+   11,
+   12,
+   12,
+   13,
+   14,
+   15
+  ],
+  "poor": [
+   0,
+   0,
+   1,
+   1,
+   2,
+   2,
+   3,
+   3,
+   4,
+   4,
+   5,
+   5,
+   6,
+   6,
+   7,
+   7,
+   8,
+   8,
+   9,
+   9,
+   10
+  ]
+ },
+ "monsters": [
+  {
+   "name": "GOBLIN",
+   "src": "Goblin",
+   "img": "02_goblin.png",
+   "ac": 15,
+   "hp": 7,
+   "str": 8,
+   "dcnt": 1,
+   "dside": 6,
+   "grp": 4
+  },
+  {
+   "name": "SLIME",
+   "src": "Ochre Jelly",
+   "img": "03_slime.png",
+   "ac": 8,
+   "hp": 45,
+   "str": 15,
+   "dcnt": 1,
+   "dside": 6,
+   "grp": 1
+  },
+  {
+   "name": "DWARF",
+   "src": "Guard",
+   "img": "04_dwarf.png",
+   "ac": 16,
+   "hp": 11,
+   "str": 13,
+   "dcnt": 1,
+   "dside": 6,
+   "grp": 4
+  },
+  {
+   "name": "TROLL",
+   "src": "Troll",
+   "img": "06_troll.png",
+   "ac": 15,
+   "hp": 84,
+   "str": 18,
+   "dcnt": 1,
+   "dside": 6,
+   "grp": 1
+  },
+  {
+   "name": "COBRA",
+   "src": "Giant Poisonous Snake",
+   "img": "23_cobra.png",
+   "ac": 14,
+   "hp": 11,
+   "str": 10,
+   "dcnt": 1,
+   "dside": 6,
+   "grp": 4
+  },
+  {
+   "name": "MIMIC",
+   "src": "Doppelganger",
+   "img": "41_mimic.png",
+   "ac": 14,
+   "hp": 52,
+   "str": 11,
+   "dcnt": 1,
+   "dside": 6,
+   "grp": 1
+  }
+ ]
+}

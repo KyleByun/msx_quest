@@ -1,0 +1,75 @@
+; gfx/convert.py 가 생성한 파일입니다. 직접 고치지 마세요.
+
+TILE_COUNT    equ 16
+MAP_ROWS      equ 15
+MAP_COLS      equ 16
+SPR_PAT_COUNT equ 60
+
+; 보스 격자 크기는 main.asm이 아니라 여기에 있어야 합니다. 게임은 첫 보스
+; 패턴부터 격자 한 칸에 셀 하나씩 그리므로, 이 값이 실제로 자른 모양과
+; 어긋나면 보스 패턴 끝을 넘어가고 스프라이트 슬롯 범위도 벗어납니다.
+MBOSS_COLS   equ 2
+MBOSS_ROWS   equ 2
+GBOSS_COLS   equ 3
+GBOSS_ROWS   equ 3
+
+PAT_PLAYER0_A equ 0
+PAT_PLAYER0_B equ 1
+PAT_PLAYER1_A equ 2
+PAT_PLAYER1_B equ 3
+PAT_PLAYER2_A equ 4
+PAT_PLAYER2_B equ 5
+PAT_ENEMY0_A equ 6
+PAT_ENEMY1_A equ 7
+PAT_ENEMY2_A equ 8
+PAT_PBULLET_A equ 9
+PAT_EBULLET_A equ 10
+PAT_MBOSS0_A equ 11
+PAT_MBOSS1_A equ 12
+PAT_MBOSS2_A equ 13
+PAT_MBOSS3_A equ 14
+PAT_GBOSS0_A equ 15
+PAT_GBOSS1_A equ 16
+PAT_GBOSS2_A equ 17
+PAT_GBOSS3_A equ 18
+PAT_GBOSS4_A equ 19
+PAT_GBOSS5_A equ 20
+PAT_GBOSS6_A equ 21
+PAT_GBOSS7_A equ 22
+PAT_GBOSS8_A equ 23
+PAT_DIGIT0 equ 24
+PAT_DIGIT1 equ 25
+PAT_DIGIT2 equ 26
+PAT_DIGIT3 equ 27
+PAT_DIGIT4 equ 28
+PAT_DIGIT5 equ 29
+PAT_DIGIT6 equ 30
+PAT_DIGIT7 equ 31
+PAT_DIGIT8 equ 32
+PAT_DIGIT9 equ 33
+PAT_LABEL0 equ 34
+PAT_LABEL1 equ 35
+PAT_ENERGY0 equ 36
+PAT_ENERGY1 equ 37
+PAT_ENERGY2 equ 38
+PAT_ENERGY3 equ 39
+PAT_ENERGY4 equ 40
+PAT_ENERGY5 equ 41
+PAT_ENERGY6 equ 42
+PAT_ENERGY7 equ 43
+PAT_ENERGY8 equ 44
+PAT_ENERGY9 equ 45
+PAT_ENERGY10 equ 46
+PAT_ENERGY11 equ 47
+PAT_ENERGY12 equ 48
+PAT_ENERGY13 equ 49
+PAT_ENERGY14 equ 50
+PAT_ENERGY15 equ 51
+PAT_ENERGY16 equ 52
+PAT_LET0 equ 53
+PAT_LET1 equ 54
+PAT_LET2 equ 55
+PAT_LET3 equ 56
+PAT_LET4 equ 57
+PAT_LET5 equ 58
+PAT_LET6 equ 59
