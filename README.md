@@ -1,3 +1,5 @@
+**한국어** · [English](#msx2-homebrew--a-vertical-shooter-and-a-first-person-dungeon)
+
 # MSX2 홈브루 — 종스크롤 슈팅과 1인칭 던전
 
 MSX2 + Z80 어셈블리로 만든 카트리지 롬 두 개입니다. 한 저장소에서 같은 도구로 빌드합니다.
@@ -81,3 +83,92 @@ build/   결과물 (완성된 .rom 만 저장소에 남긴다)
 ## 참고 자료 출처
 
 배경과 화면 배치는 Bard's Tale 화면을 참고했고, 몬스터 그림과 슈팅 게임 그래픽은 개인 습작 프로젝트에서 쓰던 것을 가져왔습니다. **원저작자가 따로 있는 소재가 섞여 있으므로 학습·시연 목적으로만 봐 주세요.**
+
+---
+---
+
+[한국어](#msx2-홈브루--종스크롤-슈팅과-1인칭-던전) · **English**
+
+# MSX2 Homebrew — A Vertical Shooter and a First-Person Dungeon
+
+Two MSX2 cartridge ROMs written in Z80 assembly. Both live in one repository and build with the same toolchain.
+
+| | `game.rom` | `quest.rom` |
+|---|---|---|
+| What | Zanac-style **vertical scrolling shooter** | Bard's Tale-style **first-person dungeon** |
+| Size | 16KB | 128KB (ASCII8 mapper) |
+| Entry point | `src/main.asm` | `src/quest.asm` |
+| Focus | Throughput — never dropping below 60fps | How comfortable movement feels |
+
+<p align="center">
+  <img src="doc/img/game.png" width="45%" alt="Vertical scrolling shooter">
+  <img src="doc/img/quest.png" width="45%" alt="First-person dungeon">
+</p>
+
+## Vertical Scrolling Shooter (`game.rom`)
+
+Built with graphics derived from Zanac reference images. The point of the exercise was to find out how much throughput an 8-bit MSX2 delivers when you write it in assembly.
+
+The background scroll is **free — the VDP does it** (R#23 vertical scroll), and the CPU only draws the single row of pixels (128 bytes) that is about to appear. Everything that moves is a hardware sprite, so the per-frame cost is game logic plus one small VRAM transfer. **CPU usage is shown on screen as a number** (`0` key).
+
+It has enemies, post-hit invulnerability, rising difficulty, a mid-boss at 2 minutes and a giant boss at 4 minutes, and PSG sound effects — and it **never drops a frame**.
+
+→ Details: [`README_game.md`](README_game.md)
+
+## First-Person Dungeon (`quest.rom`)
+
+<p align="center">
+  <img src="doc/img/quest_battle.png" width="60%" alt="Combat screen">
+</p>
+
+Wizardry / Bard's Tale style: you move one cell at a time and turn in 90-degree steps. **There is no raycasting at runtime.**
+
+If movement is restricted to whole cells, the shape of every wall surface on screen is always the same, regardless of where you are standing. And if the shape is constant, so is the texture laid over it. So the screen-to-texture coordinate transform — **perspective divide included — is solved entirely at build time and baked into pixels.** All the Z80 does at runtime is ask "is this cell a wall?" and move bytes. One full redraw takes **92ms**.
+
+The party and combat are a port of the **resolution layer** from a Python D&D implementation. Ability modifiers and base attack bonus are baked into lookup tables by *actually running the Python source at build time* — things like the floor division in `(score-10)//2` or `int(level*0.75)` are easy to get subtly wrong when reimplemented in Z80.
+
+Combat alternates one attacker at a time, Bard's Tale style, with the log scrolling in the parchment panel on the right (HMMM/HMMV on the V9938 command engine).
+
+→ Details: [`README_quest.md`](README_quest.md)
+
+## Building
+
+```powershell
+.\build.ps1          # src/main.asm  -> build/game.rom  (16KB)
+.\build_quest.ps1    # src/quest.asm -> build/quest.rom (128KB)
+
+.\run.ps1            # launch game.rom in a window
+.\verify.ps1         # boot headless and save a screenshot
+.\verify_quest.ps1
+```
+
+You need three things: **sjasmplus 1.23.1**, **openMSX 21.0**, and **uv** (for Python). Tool paths live in exactly one place, `tools.ps1`.
+
+Environment setup, how the 128KB ROM is assembled in three passes and stitched together, and the traps you hit building cartridge ROMs with sjasmplus are all written up here.
+
+→ **[`doc/build_setup.md`](doc/build_setup.md)**
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [`doc/build_setup.md`](doc/build_setup.md) | Build environment and procedure, sjasmplus traps |
+| [`doc/z80_mult_div.md`](doc/z80_mult_div.md) | Z80 multiplication and division (notes on [Grauw's article](https://map.grauw.nl/articles/mult_div_shifts.php)) |
+| [`README_game.md`](README_game.md) | The shooter — throughput, hardware scrolling, sprite limits |
+| [`README_quest.md`](README_quest.md) | The dungeon — baking perspective, porting D&D, bugs encountered |
+
+## Repository Layout
+
+```
+src/     assembly sources (some quest*.asm files are generated)
+gfx/     Python generators - bake PNGs and rule tables into .asm
+doc/     documentation
+build/   output (only the finished .rom files are committed)
+*.ps1    build / run / verify scripts
+```
+
+**Graphics and tables are computed by Python at build time and emitted as `.asm`.** The goal is to leave the Z80 as little to do at runtime as possible. Generated files under `src/` say so at the top of the file, and are never edited by hand.
+
+## Asset Credits
+
+The background and screen layout are based on a Bard's Tale screen, and the monster art and shooter graphics were carried over from a personal practice project. **Some of the material is owned by third parties, so please treat this as a learning and demonstration project only.**
