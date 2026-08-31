@@ -81,7 +81,9 @@ test/
 | `questtext.asm` | 글자 찍기, 메시지 창 |
 | `questmath.asm` | 곱셈·나눗셈 ([`z80_mult_div.md`](z80_mult_div.md)) |
 | `questparty.asm` / `questfight.asm` / `questmon.asm` | 파티 생성, 전투, 몬스터 그림 |
+| `questlevel.asm` / `questmap.asm` | 실행 시간 맵 생성, 미니맵·나침반 ([`random_map.md`](random_map.md)) |
 | `questspr0.asm` / `questspr1.asm` | 몬스터 그림 뱅크. **따로 어셈블한다** |
+| `questbgbank.asm` | 배경 화면 RLE 뱅크. **따로 어셈블한다** |
 
 ## 3. 빌드
 
@@ -136,13 +138,14 @@ uv run --with pillow python gfx\quest_rules.py      # D&D 표, 폰트, 몬스터
 ### 3-2. 128KB 롬 — 세 번 어셈블하고 이어 붙인다
 
 ```
-1) src/quest.asm      -> build/questmain.bin   24KB (뱅크 0~2)
-2) src/questspr0.asm  -> build/questspr0.bin    8KB (뱅크 3)
-3) src/questspr1.asm  -> build/questspr1.bin    8KB (뱅크 4)
+1) src/quest.asm       -> build/questmain.bin    24KB (뱅크 0~2)
+2) src/questspr0.asm   -> build/questspr0.bin     8KB (뱅크 3)
+3) src/questspr1.asm   -> build/questspr1.bin     8KB (뱅크 4)
+4) src/questbgbank.asm -> build/questbgbank.bin   8KB (뱅크 5)
 4) 세 파일을 이어 붙이고 128KB 로 채운다        -> build/quest.rom
 ```
 
-**왜 한 번에 못 하는가.** ASCII8 매퍼는 8KB 뱅크를 창에 갈아 끼웁니다. 뱅크 3 과 4 는 **둘 다 실행 중에 0xA000 에 놓입니다.** 어셈블러의 주소 공간은 64KB 하나뿐이라 같은 주소에 서로 다른 내용을 둘 수 없습니다. 그래서 뱅크마다 따로 어셈블합니다.
+**왜 한 번에 못 하는가.** ASCII8 매퍼는 8KB 뱅크를 창에 갈아 끼웁니다. 뱅크 3, 4, 5 는 **모두 실행 중에 0xA000 에 놓입니다.** 어셈블러의 주소 공간은 64KB 하나뿐이라 같은 주소에 서로 다른 내용을 둘 수 없습니다. 그래서 뱅크마다 따로 어셈블합니다.
 
 ```asm
 ; questspr0.asm - 생성기가 만든다
@@ -179,12 +182,12 @@ if ($main.Length -ne 3 * $BANK) { throw "questmain.bin 이 $($main.Length) 바�
 [Array]::Copy($main, 0, $rom, 0, $main.Length)
 
 $bankIndex = 3
-foreach ($f in $sprFiles) { ... [Array]::Copy($data, 0, $rom, $bankIndex * $BANK, $BANK); $bankIndex++ }
+foreach ($f in $bankFiles) { ... [Array]::Copy($data, 0, $rom, $bankIndex * $BANK, $BANK); $bankIndex++ }
 
 [System.IO.File]::WriteAllBytes("build\quest.rom", $rom)
 ```
 
-`questmain.bin` 이 정확히 24KB 인지 **어서션으로 확인합니다.** 본체가 24KB 를 넘으면 조용히 뱅크 3 을 밀어내서 그림이 깨집니다. 지금 본체는 23,276 / 24,576 바이트라 여유가 1,300 바이트뿐입니다.
+`questmain.bin` 이 정확히 24KB 인지 **어서션으로 확인합니다.** 본체가 24KB 를 넘으면 조용히 뱅크 3 을 밀어내서 그림이 깨집니다. 지금 본체는 20,073 / 24,576 바이트라 여유가 4,503 바이트입니다 (배경 RLE 를 뱅크 5 로 뺀 뒤).
 
 ## 4. sjasmplus 로 카트리지 롬을 만들 때 알아야 할 것
 

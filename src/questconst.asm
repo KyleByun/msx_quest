@@ -11,11 +11,12 @@ NUM_IDS      equ 21
 
 ; 면 상태
 VIS_TEX      equ 0
-VIS_SKIP     equ 1
-VIS_BLACK    equ 2
-VIS_WALL2    equ 3
-VIS_OPEN2    equ 4
-VIS_SKIP2    equ 5
+VIS_WALL3    equ 1
+VIS_OPEN3    equ 2
+VIS_GAP3     equ 3
+VIS_BLACK    equ 4
+VIS_SKIP     equ 5
+VIS_SKIP3    equ 6
 
 COL_BLACK    equ 9
 COL_PANEL    equ 4

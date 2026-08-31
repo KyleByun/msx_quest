@@ -28,19 +28,28 @@ NUM_IDS = CENTRE_ID + 1
 
 # 면 상태 (실행 중에 정해진다)
 #
-# 좌우 벽은 픽셀 블록을 두 개 갖는다. 하나는 벽일 때, 하나는 옆길이 뚫렸을 때다.
-# 뚫린 자리를 검게 두면 검은 벽처럼 보여서, 옆 통로의 바닥/천장이 이어지는
-# 그림을 따로 구워 두고 골라 쓴다. 천장/바닥/한가운데는 블록이 하나뿐이다.
+# 좌우 벽은 픽셀 블록을 세 개 갖는다. 옆칸 하나만 보고는 그 자리에 무엇이
+# 보이는지 정할 수 없기 때문이다(quest_tex.py 의 bake_side_* 참고).
+#
+#   블록 0  옆칸이 벽                        -> 비스듬한 벽면
+#   블록 1  옆칸은 뚫림, 대각선 앞칸이 벽    -> 그 칸의 정면
+#   블록 2  둘 다 뚫림                       -> 바닥/천장만 이어진다
+#
+# 천장/바닥/한가운데는 실행 중에 갈릴 것이 없으므로 블록이 하나다.
+#
+# 번호는 분기 순서다. VIS_TEX 가 0 이라야 or a / jr z 한 번으로 걸러진다(가장
+# 흔하다). 그다음이 VIS_WALL3 인데, 옆칸은 대개 벽이기 때문이다.
 VIS_TEX = 0         # 단일 블록, 그리기 (가장 흔하므로 0 - 분기가 제일 짧다)
-VIS_SKIP = 1        # 단일 블록, 건너뛰기 (정면 벽에 가려짐)
-VIS_BLACK = 2       # 단일 블록, 검정으로 채우기 (통로 끝의 어둠)
-VIS_WALL2 = 3       # 이중 블록, 첫째(벽) 그리기
-VIS_OPEN2 = 4       # 이중 블록, 둘째(뚫림) 그리기
-VIS_SKIP2 = 5       # 이중 블록, 둘 다 건너뛰기
+VIS_WALL3 = 1       # 삼중 블록, 0 번(벽면) 그리기
+VIS_OPEN3 = 2       # 삼중 블록, 1 번(대각선 앞칸의 정면) 그리기
+VIS_GAP3 = 3        # 삼중 블록, 2 번(뚫린 채 이어지는 바닥/천장) 그리기
+VIS_BLACK = 4       # 단일 블록, 검정으로 채우기 (통로 끝의 어둠)
+VIS_SKIP = 5        # 단일 블록, 건너뛰기 (정면 벽에 가려짐)
+VIS_SKIP3 = 6       # 삼중 블록, 셋 다 건너뛰기
 
 
 def is_side(sid):
-    """좌벽(2) 과 우벽(3) 만 블록을 두 개 갖는다."""
+    """좌벽(2) 과 우벽(3) 만 블록을 세 개 갖는다."""
     return sid != CENTRE_ID and (sid % 4) >= 2
 
 
@@ -152,18 +161,19 @@ def build_runs(idm, rgb, pal):
         xb = 0
         for sid, n in runs:
             data += [sid, n]
-            for i in range(n):                      # 블록 1: 벽면 그대로
+            for i in range(n):                      # 블록 0: 벽면 그대로
                 x = (xb + i) * 2
                 hi = nearest(pal, rgb[y][x])
                 lo = nearest(pal, rgb[y][x + 1])
                 data.append((hi << 4) | lo)
-            if is_side(sid):                        # 블록 2: 옆길이 뚫렸을 때
+            if is_side(sid):
                 j = sid // 4
-                for i in range(n):
-                    x = (xb + i) * 2
-                    hi = nearest(pal, T.bake_open(j, G.VIEW_X + x, G.VIEW_Y + y))
-                    lo = nearest(pal, T.bake_open(j, G.VIEW_X + x + 1, G.VIEW_Y + y))
-                    data.append((hi << 4) | lo)
+                for baker in (T.bake_side_face, T.bake_side_open):   # 블록 1, 2
+                    for i in range(n):
+                        x = (xb + i) * 2
+                        hi = nearest(pal, baker(j, G.VIEW_X + x, G.VIEW_Y + y))
+                        lo = nearest(pal, baker(j, G.VIEW_X + x + 1, G.VIEW_Y + y))
+                        data.append((hi << 4) | lo)
             xb += n
         data += [0, 0]
     return data, maxruns
@@ -269,11 +279,12 @@ def main():
         "",
         "; 면 상태",
         "VIS_TEX      equ %d" % VIS_TEX,
-        "VIS_SKIP     equ %d" % VIS_SKIP,
+        "VIS_WALL3    equ %d" % VIS_WALL3,
+        "VIS_OPEN3    equ %d" % VIS_OPEN3,
+        "VIS_GAP3     equ %d" % VIS_GAP3,
         "VIS_BLACK    equ %d" % VIS_BLACK,
-        "VIS_WALL2    equ %d" % VIS_WALL2,
-        "VIS_OPEN2    equ %d" % VIS_OPEN2,
-        "VIS_SKIP2    equ %d" % VIS_SKIP2,
+        "VIS_SKIP     equ %d" % VIS_SKIP,
+        "VIS_SKIP3    equ %d" % VIS_SKIP3,
         "",
         "COL_BLACK    equ %d" % BLACK,
         "COL_PANEL    equ %d" % nearest(pal, (182, 182, 182)),
@@ -303,15 +314,22 @@ def main():
     for row in MAP:
         flat += [1 if c == '#' else 0 for c in row]
     parts.append(db("MapData", flat, per=16))
-    parts.append("")
-    parts.append(db("BgRle", list(comp)))
-    parts.append("BgRleEnd:")
     open(os.path.join(ROOT, "src", "questdata.asm"), "w", encoding="utf-8").write(
         "\n".join(parts) + "\n")
 
-    total = len(comp) + len(runs) + ftotal + 32 + 256
-    print("wrote src/questconst.asm, src/questdata.asm")
-    print("데이터 합계: %d 바이트" % total)
+    # 배경은 따로 낸다. quest.rom 은 이것을 8KB 뱅크 하나에 통째로 넣어 0xA000
+    # 창으로 불러 쓰고(questbgbank.asm), quest2.rom 은 본체 안에 그냥 넣는다.
+    # 벽면 자료가 블록 셋으로 늘면서 본체 뱅크(0x4000-0x9FFF)가 꽉 찼기 때문이다.
+    bg = ["; gfx/quest_convert.py 가 생성한 파일입니다. 직접 고치지 마세요.", "",
+          "; 배경 화면 RLE %d 바이트. 끝은 BgRleEnd 대신 BG_RLE_LEN 으로도 잰다" % len(comp),
+          "; (뱅크에 놓으면 링크 시점에 주소를 알 수 없다).",
+          db("BgRle", list(comp)), "BgRleEnd:"]
+    open(os.path.join(ROOT, "src", "questbg.asm"), "w", encoding="utf-8").write(
+        "\n".join(bg) + "\n")
+
+    total = len(runs) + ftotal + 32 + 256
+    print("wrote src/questconst.asm, src/questdata.asm, src/questbg.asm")
+    print("본체 뱅크 자료 %d 바이트 + 배경 뱅크 %d 바이트" % (total, len(comp)))
 
 
 if __name__ == "__main__":

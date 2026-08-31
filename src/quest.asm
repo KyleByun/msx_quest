@@ -73,8 +73,10 @@ blockDepth  ds 1                ; 앞으로 몇 칸 만에 벽에 막히는가 (
 frontH      ds 1
 frontX      ds 1
 frontW      ds 1
-cellX       ds 1
+cellX       ds 1                ; 지금 보고 있는 구간의 칸
 cellY       ds 1
+cellX2      ds 1                ; 그 한 칸 앞 (옆면은 두 칸을 다 봐야 정해진다)
+cellY2      ds 1
 VarsEnd:
 
 ; 면 번호로 바로 찾을 수 있게 페이지 경계에 둔다.
@@ -136,6 +138,26 @@ TurnHero    ds 1                ; 이번 라운드에서 다음에 칠 영웅
 TurnMon     ds 1                ; 다음에 칠 몬스터
 StepCount   ds 1                ; 마주치기 판정용 걸음 수
 
+; 지도 표시
+MapOn       ds 1                ; 0=양피지, 그 외=미니맵
+mKey        ds 1                ; 4 행의 M 키 상태 (keyState 와 별도)
+prevM       ds 1                ; M 의 이전 상태 - 새로 눌림 판정용
+
+; 실행 시간 맵 생성 (questlevel.asm). MapDataRam 은 0xC200 블록 뒤쪽에 둔다.
+RoomCount   ds 1
+RoomTarget  ds 1
+RoomAttempts ds 1
+RoomW       ds 1
+RoomH       ds 1
+RoomX       ds 1
+RoomY       ds 1
+RoomCX      ds 1
+RoomCY      ds 1
+PrevRoomX   ds 1
+PrevRoomY   ds 1
+MiniMapY    ds 1                ; DrawMap 이 채우는 맵 행 번호
+MiniMapScreenY ds 1             ; 지도의 현재 화면 y
+
 ; 파티와 몬스터.
 ;
 ; ExpandTbl 은 페이지 머리에 둔다. PutChar 가 니블 값으로 표를 볼 때 하위
@@ -146,6 +168,13 @@ StepCount   ds 1                ; 마주치기 판정용 걸음 수
 ExpandTbl   ds 32
 Party       ds PARTY_N * PARTY_STRIDE
 Monsters    ds MON_N * MON_STRIDE
+
+; 실행 시간 맵 생성의 결과 지도. 1=벽, 0=통로. IsWall 이 여기를 본다.
+; RamEnd 뒤에 두면 Init 의 0 지우기에서 빠지므로 RamEnd 앞에 둔다.
+MapDataRam  ds MAP_W * MAP_W
+
+; 미니맵 한 행分 (questmap.asm). 맵 한 칸 = 3바이트.
+MiniMapRow  ds MAP_W * 3
 RamEnd:
 
 STACK_TOP   equ 0xF380
@@ -185,8 +214,8 @@ Init:
     ; 그러면 이동 키가 전부 무시되어 멈춘 것처럼 보이고, 쓰레기 MonKind 로
     ; 몬스터 그림을 그리다가 화면에 줄이 그어졌다.
 
-    ld a, 1                     ; 시작 위치 - 맵에서 통로인 칸
-    ld (posX), a
+    ld a, 1                     ; 시작 위치는 MakeLevel 이 첫 방 중심으로 정한다
+    ld (posX), a                ; (MakeLevel 실패 대비 기본값)
     ld a, 13
     ld (posY), a
     ld a, 1
@@ -196,8 +225,9 @@ Init:
     ld c, 1
     call WriteVdpReg
 
-    ld hl, 0x1234               ; 난수 씨앗 (지금은 고정 - 나중에 키 입력으로)
-    ld (Seed), hl
+    call SeedRng                ; RTC + R 레지스터로 시드를 만들고
+    call MakeLevel              ; NetHack 식으로 방과 통로를 파 놓는다
+
     call MakeParty
     call DrawParty
     call MsgReset
@@ -224,6 +254,15 @@ MainLoop:
     call ReadInput
     call HandleInput
     jr MainLoop
+
+; ---------------------------------------------------------------------------
+; 이동이 있었고 지도가 켜져 있으면 미니맵을 다시 그린다.
+; ---------------------------------------------------------------------------
+AfterMove:
+    ld a, (MapOn)
+    or a
+    ret z
+    jp DrawMap
 
 ;-----------------------------------------------------------------------------
 ; 페이지 2 를 카트리지 슬롯으로 전환
@@ -336,11 +375,20 @@ UploadPalette:
 ; RLE: 0x80|n 이면 다음 바이트를 n+1 회, 그 외 n 이면 이어지는 n+1 바이트 그대로.
 ; 화면 전체 27136 바이트를 VRAM 0x0000 부터 채운다. 화면이 꺼져 있는 동안
 ; 돌기 때문에 VRAM 접근 간격은 신경 쓰지 않아도 된다.
+;
+; 자료는 뱅크 5 에 따로 있다(questbgbank.asm). 0xA000 창을 잠깐 그쪽으로 돌렸다가
+; 끝나면 몬스터 그림 뱅크로 되돌린다 - 안 되돌리면 첫 전투에서 그림 자리에서
+; 배경 바이트를 읽는다. 끝 판정도 주소가 아니라 길이로 한다.
 ;-----------------------------------------------------------------------------
+BG_BANK     equ 5
+BG_END      equ 0xA000 + BG_RLE_LEN
+
 UnpackBg:
+    ld a, BG_BANK
+    ld (ASC8_P3), a             ; 0xA000-0xBFFF = 배경 뱅크
     ld hl, 0
     call SetVramWrite
-    ld hl, BgRle
+    ld hl, 0xA000
 .loop:
     ld a, (hl)
     inc hl
@@ -366,11 +414,13 @@ UnpackBg:
     djnz .lit
 .more:
     ld a, h
-    cp BgRleEnd >> 8
+    cp BG_END >> 8
     jr nz, .loop
     ld a, l
-    cp BgRleEnd & 0xFF
+    cp BG_END & 0xFF
     jr nz, .loop
+    ld a, 3
+    ld (ASC8_P3), a             ; 그림 첫 뱅크로 되돌린다
     ret
 
 ;-----------------------------------------------------------------------------
@@ -410,23 +460,29 @@ RenderDungeon:
     ld a, (de)                  ; 그 면의 상태
     or a
     jr z, .draw1                ; VIS_TEX - 가장 흔하므로 맨 앞
-    cp VIS_WALL2
-    jr z, .wall2
-    cp VIS_OPEN2
-    jr z, .open2
+    cp VIS_WALL3
+    jr z, .wall3                ; 그다음이 벽면 - 옆칸은 대개 벽이다
+    cp VIS_OPEN3
+    jr z, .open3
+    cp VIS_GAP3
+    jr z, .gap3
     cp VIS_BLACK
     jr z, .black
     cp VIS_SKIP
     jr z, .skip1
-    ; VIS_SKIP2 - 이중 블록을 둘 다 건너뛴다
-    xor a
-    ld (addrOk), a
+    ; VIS_SKIP3 - 삼중 블록을 셋 다 건너뛴다. 두 개를 여기서 밀고 나머지
+    ; 하나는 .skip1 -> .advance 가 민다.
     ld a, b
     add a, l
     ld l, a
-    jr nc, .advance
+    jr nc, $ + 3                ; inc h 한 바이트를 건너뛴다
     inc h
-    jr .advance
+    ld a, b
+    add a, l
+    ld l, a
+    jr nc, $ + 3
+    inc h
+    jp .skip1
 
 .draw1:                         ; 단일 블록 (천장/바닥)
     ld a, (addrOk)              ; CheckAddr 인라인 - 핫 패스라 call 값이 아깝다
@@ -436,9 +492,9 @@ RenderDungeon:
     outi                        ; 16
     nop                         ;  4
     jp nz, .t1                  ; 10  -> 합 30 T-state
-    jp .run
+    jp .run                     ; outi 가 이미 HL 을 끝까지 밀었다
 
-.wall2:                         ; 이중 블록 중 첫째(벽)를 그리고 둘째는 건너뛴다
+.wall3:                         ; 0 번(비스듬한 벽면)을 그리고 1, 2 번은 건너뛴다
     ld a, (addrOk)
     or a
     call z, ResumeAddr
@@ -448,23 +504,49 @@ RenderDungeon:
     nop
     jp nz, .t2
     pop bc
-    jr .advance
-
-.open2:                         ; 첫째(벽)를 건너뛰고 둘째(뚫린 자리)를 그린다
-    ld a, b                     ; SkipBlock 인라인
+    ld a, b                     ; 1 번 건너뛰기
     add a, l
     ld l, a
-    jr nc, .o2a
+    jr nc, $ + 3
     inc h
-.o2a:
+    jr .advance                 ; 2 번은 .advance 가 민다
+
+.open3:                         ; 1 번(대각선 앞칸의 정면)을 그린다
+    ld a, b                     ; 0 번 건너뛰기
+    add a, l
+    ld l, a
+    jr nc, $ + 3
+    inc h
     ld a, (addrOk)
     or a
     call z, ResumeAddr
+    push bc
 .t3:
     outi
     nop
     jp nz, .t3
-    jp .run
+    pop bc
+    jr .advance                 ; 2 번은 .advance 가 민다
+
+.gap3:                          ; 2 번(뚫린 채 이어지는 바닥/천장)을 그린다
+    ld a, b                     ; 0 번 건너뛰기
+    add a, l
+    ld l, a
+    jr nc, $ + 3
+    inc h
+    ld a, b                     ; 1 번 건너뛰기
+    add a, l
+    ld l, a
+    jr nc, $ + 3
+    inc h
+    ld a, (addrOk)
+    or a
+    call z, ResumeAddr
+.t4:
+    outi
+    nop
+    jp nz, .t4
+    jp .run                     ; 마지막 블록이라 더 밀 것이 없다
 
 .black:                         ; 통로 끝의 어둠
     ld a, (addrOk)
@@ -487,7 +569,7 @@ RenderDungeon:
     ld a, b                     ; HL += 폭 (블록 하나만큼)
     add a, l
     ld l, a
-    jr nc, .run
+    jp nc, .run                 ; 분기 처리가 늘어 jr 사거리를 넘었다 (jp 가 오히려 1 T 빠르다)
     inc h
     jp .run
 
@@ -624,9 +706,10 @@ ResumeAddr:
 ; 면 상태 정하기
 ;
 ; 지도를 여기서 한 번만 본다. 그리는 루프 안에는 지도 조회가 없다.
-;   VIS_TEX   : 구워 둔 텍스처 그대로
-;   VIS_BLACK : 옆길이 뚫려 있어 검게
+;   VIS_TEX   : 구워 둔 텍스처 그대로 (천장/바닥)
+;   VIS_BLACK : 끝까지 안 막힌 한가운데의 어둠
 ;   VIS_SKIP  : 정면 벽에 가려지므로 1단계에서 건너뛴다
+;   VIS_WALL3 / VIS_OPEN3 / VIS_GAP3 / VIS_SKIP3 : 좌우 벽 (SideVis 참고)
 ;-----------------------------------------------------------------------------
 BuildVisibility:
     ld a, MAXD + 1              ; 앞으로 몇 칸 만에 막히는지 찾는다
@@ -688,7 +771,7 @@ BuildVisibility:
     inc c
     call SetVis                 ; 바닥
     inc c
-    ld a, VIS_SKIP2             ; 좌우는 블록이 둘이라 둘 다 건너뛴다
+    ld a, VIS_SKIP3             ; 좌우는 블록이 셋이라 셋 다 건너뛴다
     call SetVis
     inc c
     call SetVis
@@ -704,20 +787,23 @@ BuildVisibility:
     ld a, VIS_TEX
     call SetVis                 ; 바닥
 
-    ld a, b                     ; 좌우는 그 칸의 옆 이웃이 벽인지에 달렸다
-    call CellAhead
+    ; 옆면은 이 칸과 그 한 칸 앞을 함께 봐야 정해지므로 둘 다 미리 담아 둔다.
+    ld a, b
+    call CellAhead              ; 구간 j 의 칸
     ld a, d
     ld (cellX), a
     ld a, e
     ld (cellY), a
+    ld a, b
+    inc a
+    call CellAhead              ; 그 한 칸 앞 - 대각선을 보기 위한 것
+    ld a, d
+    ld (cellX2), a
+    ld a, e
+    ld (cellY2), a
 
-    ld a, 3                     ; 왼쪽 이웃 (facing - 1)
-    call NeighbourCell
-    call IsWall
-    ld a, VIS_OPEN2             ; 통로면 옆 통로가 이어지는 그림
-    jr z, .leftvis
-    ld a, VIS_WALL2             ; 벽이면 벽면 그림
-.leftvis:
+    ld a, 3                     ; 왼쪽 (facing - 1)
+    call SideVis
     push af
     ld a, b
     call SegBase
@@ -726,13 +812,8 @@ BuildVisibility:
     pop af
     call SetVis
 
-    ld a, 1                     ; 오른쪽 이웃 (facing + 1)
-    call NeighbourCell
-    call IsWall
-    ld a, VIS_OPEN2
-    jr z, .rightvis
-    ld a, VIS_WALL2
-.rightvis:
+    ld a, 1                     ; 오른쪽 (facing + 1)
+    call SideVis
     push af
     ld a, b
     call SegBase
@@ -746,6 +827,43 @@ BuildVisibility:
     ld a, b
     cp NSEG
     jp c, .each
+    ret
+
+; A = 회전량 (1 = 오른쪽, 3 = 왼쪽) -> A = 그쪽 옆면의 상태. BC 보존.
+;
+; 옆칸 하나만 봐서는 그릴 그림이 정해지지 않는다. 광선이 그 자리를 지나 z = j+1
+; 평면에서 만나는 것은 **대각선 앞칸**(옆으로 1, 앞으로 j+1)이기 때문이다.
+;
+;   옆칸이 벽                       -> VIS_WALL3  비스듬한 벽면
+;   옆칸 뚫림, 대각선 앞칸이 벽     -> VIS_OPEN3  그 칸의 정면
+;   둘 다 뚫림                      -> VIS_GAP3   바닥/천장만 이어진다
+;
+; 한때 앞의 두 경우만 있었다. 그러면 광장 한가운데에 섰을 때 화면 좌우 끝에
+; 있지도 않은 벽이 그려진다 - 옆칸 하나만 보고 두 칸의 결과를 그린 탓이다.
+SideVis:
+    push bc
+    ld c, a                     ; 회전량을 남겨 둔다
+    ld a, (cellX)
+    ld d, a
+    ld a, (cellY)
+    ld e, a
+    ld a, c
+    call NeighbourCell
+    call IsWall
+    ld a, VIS_WALL3
+    jr nz, .done                ; 옆이 벽이면 여기서 끝이다
+    ld a, (cellX2)              ; 뚫렸으면 대각선 앞칸을 마저 본다
+    ld d, a
+    ld a, (cellY2)
+    ld e, a
+    ld a, c
+    call NeighbourCell
+    call IsWall
+    ld a, VIS_OPEN3
+    jr nz, .done
+    ld a, VIS_GAP3
+.done:
+    pop bc
     ret
 
 ; A = 구간 번호 j -> A = 그 구간의 면 번호 시작값 j*4. BC 보존.
@@ -796,24 +914,28 @@ CellAhead:
     pop bc
     ret
 
-; A = 회전량 (1 = 오른쪽, 3 = 왼쪽). (cellX,cellY) 의 그쪽 이웃을 D,E 에.
+; A = 회전량 (1 = 오른쪽, 3 = 왼쪽), D,E = 기준 칸. 그쪽 이웃을 D,E 에 돌려준다.
+;
+; 기준 칸을 RAM 이 아니라 D,E 로 받는다. SideVis 가 같은 회전량으로 두 칸(이 칸과
+; 한 칸 앞)의 이웃을 잇달아 물어보기 때문이다.
 NeighbourCell:
     push bc                     ; 호출하는 쪽이 구간 번호를 B 에 들고 있다
-    ld c, a
-    ld a, (facing)
-    add a, c
+    ld b, d                     ; 기준 칸을 B,C 로 옮긴다 - DE 로 표를 짚어야 한다
+    ld c, e
+    ld hl, facing
+    add a, (hl)                 ; facing + 회전량
     and 3
-    add a, a
+    add a, a                    ; 표 한 칸이 dx, dy 두 바이트
     ld l, a
     ld h, 0
     ld de, DirTab
     add hl, de
-    ld a, (cellX)
-    add a, (hl)
+    ld a, b
+    add a, (hl)                 ; x + dx
     ld d, a
     inc hl
-    ld a, (cellY)
-    add a, (hl)
+    ld a, c
+    add a, (hl)                 ; y + dy
     ld e, a
     pop bc
     ret
@@ -835,7 +957,7 @@ IsWall:
     add a, d                    ; + x. 맵이 16칸 폭이라 8비트로 끝난다
     ld l, a
     ld h, 0
-    ld bc, MapData
+    ld bc, MapDataRam           ; 실행 시간 생성 지도 (questlevel.asm)
     add hl, bc
     ld a, (hl)
     or a
@@ -866,7 +988,16 @@ ReadInput:
     out (PPI_ROW), a
     in a, (PPI_COL)
     cpl                         ; 매트릭스는 반전되어 읽힌다. 1 이면 눌림
-    ld (keyState), a
+    ld (keyState), a            ; 8 행 전체 (커서 bit4-7 + 스페이스 bit0)
+
+    in a, (PPI_ROW)             ; 4 행 = M N B , . / 등
+    and 0xF0
+    or 4
+    out (PPI_ROW), a
+    in a, (PPI_COL)
+    cpl
+    and 0x04                    ; bit2 = M
+    ld (mKey), a
     ret
 
 HandleInput:
@@ -878,6 +1009,22 @@ HandleInput:
     ld c, a
     ld a, b
     ld (prevKey), a
+
+    ld a, (mKey)                ; M 은 4행이라 keyState 와 별도로 새로 눌림을 본다
+    ld b, a
+    ld a, (prevM)
+    cpl
+    and b
+    ld d, a
+    ld a, b
+    ld (prevM), a
+    ld a, d
+    or a
+    jr z, .nomap
+    push bc                     ; ToggleMap 은 DrawMap 을 거치며 BC 를 부순다. 새로
+    call ToggleMap              ; 눌린 키 비트가 C 에 있으므로 반드시 지켜야 한다 -
+    pop bc                      ; 안 그러면 M 을 누를 때 제멋대로 걷거나 돈다.
+.nomap:
 
     ld a, (BattleOn)            ; 전투 중에는 스페이스만 받는다
     or a
@@ -942,7 +1089,7 @@ HandleInput:
 .moved:
     ld a, 1
     ld (needDraw), a
-    ret
+    jp AfterMove                ; 지도가 켜져 있으면 미니맵도 다시 그린다
 
 ;-----------------------------------------------------------------------------
 ; VDP 기본 루틴
@@ -986,6 +1133,8 @@ WriteVdpReg:
     include "src/questparty.asm"
     include "src/questfight.asm"
     include "src/questmon.asm"
+    include "src/questlevel.asm"
+    include "src/questmap.asm"
     include "src/questdata.asm"
 
 ; 본체는 뱅크 0~2 (0x4000-0x9FFF) 다. 그림 뱅크는 questspr*.asm 이 따로 만들고

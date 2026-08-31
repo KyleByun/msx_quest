@@ -227,9 +227,12 @@ def main():
     # ---- 화면 배치 ----
     A("; --- 하단 파티 칸 배치 (배경의 머리글 위치에 맞췄다) ---------------------")
     A("ROW_Y0       equ 152               ; 첫 줄 y")
-    A("ROW_DY       equ 8")
+    A("ROW_DY       equ 10                ; 8(글자 높이) + 2 dot. 줄 사이가 붙어 보여서 늘렸다.\n"
+      "                                    ; 마지막 줄(6번)이 y=202~209, 그 아래 y=210 부터 패널 테두리다 - 꼭 맞는다.")
     A("COL_NUM      equ 2                 ; 번호")
-    A("COL_NAME     equ 8                 ; 이름 (%d 글자)" % NAME_LEN)
+    A(("COL_NAME     equ 10                ; 이름 (%d 글자). 번호 바로 뒤라서 1 dot 띄운다.\n"
+       "                                    ; x 는 짝수여야 한다(TextAddr 가 바이트 단위로 찍는다) - 2px 가 최소 단위.")
+      % NAME_LEN)
     A("COL_AC       equ 108               ; 이하 세 글자씩 오른쪽 맞춤")
     A("COL_HIT      equ 132")
     A("COL_PTS      equ 162")

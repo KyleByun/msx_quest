@@ -36,6 +36,14 @@ def visibility(px, py, facing):
             block = k
             break
 
+    def side(cx, cy, dx, dy):
+        """옆칸과 대각선 앞칸을 함께 본다 - 둘을 다 봐야 그림이 정해진다."""
+        if is_wall(cx + dx, cy + dy):
+            return "wall"                       # 비스듬한 벽면
+        if is_wall(cx + fx + dx, cy + fy + dy):
+            return "face"                       # 대각선 앞칸의 정면
+        return "gap"                            # 바닥/천장만 이어진다
+
     vis = {C.CENTRE_ID: "skip" if block <= G.MAXD else "black"}
     for j in range(G.NSEG):
         base = j * 4
@@ -45,8 +53,8 @@ def visibility(px, py, facing):
             continue
         cx, cy = px + fx * j, py + fy * j
         vis[base + 0] = vis[base + 1] = "tex"   # 천장, 바닥
-        vis[base + 2] = "wall" if is_wall(cx + lx, cy + ly) else "open"
-        vis[base + 3] = "wall" if is_wall(cx + rx, cy + ry) else "open"
+        vis[base + 2] = side(cx, cy, lx, ly)
+        vis[base + 3] = side(cx, cy, rx, ry)
     return vis, block
 
 
@@ -62,10 +70,13 @@ def render(px, py, facing):
                 continue                        # 2단계에서 정면 벽이 덮는다
             if st == "black":
                 continue
-            if st == "open":                    # 이중 블록의 둘째
+            if st == "face":                    # 삼중 블록의 1 번
                 j = IDM[yy][xx] // 4
-                d[xx, yy] = T.bake_open(j, G.VIEW_X + xx, G.VIEW_Y + yy)
-            else:                               # 단일 블록 또는 이중 블록의 첫째
+                d[xx, yy] = T.bake_side_face(j, G.VIEW_X + xx, G.VIEW_Y + yy)
+            elif st == "gap":                   # 삼중 블록의 2 번
+                j = IDM[yy][xx] // 4
+                d[xx, yy] = T.bake_side_open(j, G.VIEW_X + xx, G.VIEW_Y + yy)
+            else:                               # 단일 블록 또는 삼중 블록의 0 번
                 d[xx, yy] = RGB[yy][xx]
 
     if block <= G.MAXD:                         # 2단계: 정면 벽
