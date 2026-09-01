@@ -73,107 +73,80 @@ RaceTable:
     db 254, 2, 0, 0, 0, 0
     db 72, 65, 76, 70, 76, 73, 78, 71
 
-; --- 직업 (race_job.py CLASS_DATA + hero.py apply_class_stats) ----------
+; --- 직업 (quest_sena.md 의 다섯. BAB 만 race_job.py 에서 온다) ---------
 ; 히트다이스, BAB 진행(0 good/1 average/2 poor), 능력치 보정 6,
-; 피해 주사위 개수/면, 약자 2, 이름 10
+; 피해 주사위 개수/면, 캐스터 여부, 약자 2, 이름 10
 ClassTable:
-    ; Barbarian
-    db 12, 0
-    db 0, 0, 0, 0, 0, 0
-    db 1, 12
-    db 66, 65
-    db 66, 65, 82, 66, 65, 82, 73, 65, 78, 32
-    ; Bard
-    db 6, 1
-    db 0, 0, 0, 0, 0, 0
-    db 1, 6
-    db 66, 68
-    db 66, 65, 82, 68, 32, 32, 32, 32, 32, 32
-    ; Cleric
-    db 8, 1
-    db 4, 0, 4, 0, 6, 0
-    db 1, 8
-    db 67, 76
-    db 67, 76, 69, 82, 73, 67, 32, 32, 32, 32
-    ; Druid
-    db 8, 1
-    db 0, 0, 0, 0, 0, 0
-    db 1, 8
-    db 68, 82
-    db 68, 82, 85, 73, 68, 32, 32, 32, 32, 32
-    ; Fighter
+    ; FIGHTER
     db 10, 0
     db 6, 2, 4, 0, 0, 0
     db 1, 10
+    db 0
     db 70, 73
     db 70, 73, 71, 72, 84, 69, 82, 32, 32, 32
-    ; Monk
+    ; ROGUE
     db 8, 1
-    db 0, 0, 0, 0, 0, 0
-    db 1, 8
-    db 77, 79
-    db 77, 79, 78, 75, 32, 32, 32, 32, 32, 32
-    ; Paladin
-    db 10, 0
-    db 0, 0, 0, 0, 0, 0
-    db 1, 10
-    db 80, 65
-    db 80, 65, 76, 65, 68, 73, 78, 32, 32, 32
-    ; Ranger
-    db 8, 0
-    db 0, 6, 0, 0, 4, 0
-    db 1, 10
-    db 82, 65
-    db 82, 65, 78, 71, 69, 82, 32, 32, 32, 32
-    ; Rogue
-    db 6, 1
     db 2, 8, 0, 0, 0, 0
-    db 2, 6
+    db 1, 6
+    db 0
     db 82, 79
     db 82, 79, 71, 85, 69, 32, 32, 32, 32, 32
-    ; Sorcerer
-    db 4, 2
-    db 0, 0, 0, 0, 0, 0
-    db 1, 4
-    db 83, 79
-    db 83, 79, 82, 67, 69, 82, 69, 82, 32, 32
-    ; Wizard
-    db 4, 2
+    ; WIZARD
+    db 6, 2
     db 0, 0, 0, 8, 0, 0
-    db 2, 6
+    db 1, 6
+    db 1
     db 87, 73
     db 87, 73, 90, 65, 82, 68, 32, 32, 32, 32
+    ; CLERIC
+    db 8, 1
+    db 4, 0, 4, 0, 6, 0
+    db 1, 8
+    db 1
+    db 67, 76
+    db 67, 76, 69, 82, 73, 67, 32, 32, 32, 32
+    ; MUSA
+    db 10, 0
+    db 4, 6, 0, 0, 0, 0
+    db 1, 10
+    db 0
+    db 77, 85
+    db 77, 85, 83, 65, 32, 32, 32, 32, 32, 32
+
+; 레벨별 최대 MP (quest_sena.md). 색인이 레벨이라 0 번은 안 쓴다.
+MpTable:
+    db 0, 4, 6, 14, 17, 27, 32, 38, 44, 57, 64
 
 ; --- 몬스터 (battlefield.py monster_pool + monster_stats.py) ------------
-; AC, HP, 힘, 피해 개수/면, 이름 12
+; AC, HP, 힘, 피해 개수/면, 무리 최대, 민첩, 그림, 이름 11
 MonsterTable:
     ; GOBLIN  <- monster_stats.py Goblin
-    db 15, 7, 8, 1, 6, 4
+    db 15, 7, 8, 1, 6, 4, 14
     db SPR_BANK_0
     dw SPR_ADDR_0
     db 71, 79, 66, 76, 73, 78, 32, 32, 32, 32, 32
     ; SLIME   <- monster_stats.py Ochre Jelly
-    db 8, 45, 15, 1, 6, 1
+    db 8, 45, 15, 1, 6, 1, 6
     db SPR_BANK_1
     dw SPR_ADDR_1
     db 83, 76, 73, 77, 69, 32, 32, 32, 32, 32, 32
     ; DWARF   <- monster_stats.py Guard
-    db 16, 11, 13, 1, 6, 4
+    db 16, 11, 13, 1, 6, 4, 12
     db SPR_BANK_2
     dw SPR_ADDR_2
     db 68, 87, 65, 82, 70, 32, 32, 32, 32, 32, 32
     ; TROLL   <- monster_stats.py Troll
-    db 15, 84, 18, 1, 6, 1
+    db 15, 84, 18, 1, 6, 1, 13
     db SPR_BANK_3
     dw SPR_ADDR_3
     db 84, 82, 79, 76, 76, 32, 32, 32, 32, 32, 32
     ; COBRA   <- monster_stats.py Giant Poisonous Snake
-    db 14, 11, 10, 1, 6, 4
+    db 14, 11, 10, 1, 6, 4, 18
     db SPR_BANK_4
     dw SPR_ADDR_4
     db 67, 79, 66, 82, 65, 32, 32, 32, 32, 32, 32
     ; MIMIC   <- monster_stats.py Doppelganger
-    db 14, 52, 11, 1, 6, 1
+    db 14, 52, 11, 1, 6, 1, 18
     db SPR_BANK_5
     dw SPR_ADDR_5
     db 77, 73, 77, 73, 67, 32, 32, 32, 32, 32, 32

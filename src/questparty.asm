@@ -176,7 +176,19 @@ MakeMember:
     jp MakeName
 
 ; 아직 안 쓴 직업 번호를 하나 뽑는다. A 로 돌려주고 자리표에 표시한다.
+;
+; 직업이 다섯인데 파티는 여섯이라 하나는 반드시 겹친다. 다 썼으면 자리표를 비워
+; 다시 처음부터 뽑게 한다 - 안 비우면 빈 자리를 영영 못 찾고 맴돈다. 결과는
+; **다섯 직업이 하나씩 다 나오고 여섯째만 무작위로 겹치는** 파티가 된다. 회복과
+; 주문을 쓰는 직업이 빠진 파티가 나오지 않는 것이 이 게임에는 중요하다.
 PickClass:
+    ld hl, (ClassUsed)
+    ld a, l
+    and (1 << CLASS_N) - 1
+    cp (1 << CLASS_N) - 1
+    jr nz, .try
+    ld hl, 0
+    ld (ClassUsed), hl
 .try:
     ld c, CLASS_N
     call RandMod
@@ -318,6 +330,70 @@ CalcStats:
     ld (hl), a
     pop hl
 
+    ; --- MP (quest_sena.md 의 주문 포인트) ---
+    ;
+    ; 캐스터(마법사/성직자)만 갖는다. 레벨별 표에 지능 보정을 레벨만큼 더한다 -
+    ; 문서에 "지능이 높으면 레벨업 될 때 더 많은 MP" 라고만 있어서 레벨마다 한
+    ; 번씩 더하는 것으로 잡았다.
+    push hl
+    ld de, P_CLASS
+    add hl, de
+    ld a, (hl)
+    call ClassPtr
+    ld de, C_CASTER
+    add hl, de
+    ld a, (hl)
+    pop hl
+    or a
+    ld a, 0                     ; ld 는 플래그를 안 건드린다
+    jr z, .setmp                ; 캐스터가 아니면 0
+
+    push hl
+    ld de, P_LEVEL
+    add hl, de
+    ld a, (hl)
+    cp MAX_LEVEL + 1            ; 표 밖으로 나가지 않게
+    jr c, .lvok
+    ld a, MAX_LEVEL
+.lvok:
+    ld (TmpLevel), a
+    pop hl
+    push hl
+    ld de, P_INT
+    add hl, de
+    ld a, (hl)
+    call AbilityMod
+    ld c, a                     ; C = 지능 보정 (부호 있음)
+    ld a, (TmpLevel)
+    ld l, a
+    ld h, 0
+    ld de, MpTable
+    add hl, de
+    ld b, (hl)                  ; B = 표의 기본 MP
+    ld a, (TmpLevel)
+.mploop:
+    push af
+    ld a, b
+    add a, c
+    ld b, a
+    pop af
+    dec a
+    jr nz, .mploop
+    ld a, b
+    bit 7, a
+    jr z, .mppos
+    xor a                       ; 지능이 낮아 음수가 되면 0
+.mppos:
+    pop hl
+.setmp:
+    push hl
+    ld de, P_MAXSPL
+    add hl, de
+    ld (hl), a
+    dec hl                      ; P_SPL 이 바로 앞이다
+    ld (hl), a
+    pop hl
+
     ; --- AC = 12 + 민첩 보정 ---
     push hl
     ld de, P_DEX
@@ -407,13 +483,9 @@ CalcStats:
     push hl
     ld de, P_DMOD
     add hl, de
-    ld (hl), c
-    inc hl
-    ld (hl), 0                  ; P_SPL
-    inc hl
-    ld (hl), 0                  ; P_MAXSPL - 원본에 주문 자원이 없다
-    pop hl
-    ret
+    ld (hl), c                  ; P_SPL / P_MAXSPL 은 위의 MP 절이 이미 채웠다.
+    pop hl                      ; 예전에는 여기서 0 으로 지웠는데, 그대로 두면
+    ret                         ; 캐스터의 MP 를 도로 지운다.
 
 ;-----------------------------------------------------------------------------
 ; 이름 만들기. 원본에는 이름 생성기가 없어 음절 표를 새로 넣었다.

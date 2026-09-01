@@ -58,14 +58,27 @@ MONSTER_POOL = [
 MON_DEFAULT_DAMAGE = (1, 6)
 MON_DAMAGE = {"Goblin": (1, 6)}
 
-# hero.py apply_class_stats - 기본 10 에 더하는 값
-CLASS_BONUS = {
-    "Fighter": {"str": 6, "con": 4, "dex": 2, "dmg": (1, 10)},
-    "Rogue":   {"dex": 8, "str": 2, "dmg": (2, 6)},
-    "Wizard":  {"int": 8, "dmg": (2, 6)},
-    "Ranger":  {"dex": 6, "wis": 4, "dmg": (1, 10)},
-    "Cleric":  {"wis": 6, "con": 4, "str": 4},
-}
+# quest_sena.md 의 다섯 직업.
+#
+# 히트 다이스는 **문서(D&D 5판)** 를 따른다. race_job.py 는 다른 판이라 도적 d6,
+# 마법사 d4 로 값이 다르다. BAB 진행은 원본 그대로 가져오고, 무사는 D&D 에 없는
+# 직업이라 전사급(d10, good)으로 둔다.
+#
+# 능력치 보정은 hero.py apply_class_stats 의 방식(기본 10 에 더한다) 그대로다.
+#
+#   이름, 히트다이스, BAB, 약자, 캐스터, 능력치 보정, 피해 주사위
+GAME_CLASSES = [
+    ("FIGHTER", 10, "good",    "FI", 0, {"str": 6, "con": 4, "dex": 2}, (1, 10)),
+    ("ROGUE",    8, "average", "RO", 0, {"dex": 8, "str": 2},           (1, 6)),
+    ("WIZARD",   6, "poor",    "WI", 1, {"int": 8},                     (1, 6)),
+    ("CLERIC",   8, "average", "CL", 1, {"wis": 6, "con": 4, "str": 4}, (1, 8)),
+    ("MUSA",    10, "good",    "MU", 0, {"str": 4, "dex": 6},           (1, 10)),
+]
+
+# 주문 포인트. quest_sena.md 의 표(D&D 5e DMG p.288 변형 규칙)를 그대로 옮겼다.
+# 색인이 레벨이므로 0 번은 쓰지 않는다.
+MP_BY_LEVEL = [0, 4, 6, 14, 17, 27, 32, 38, 44, 57, 64]
+MAX_LEVEL = len(MP_BY_LEVEL) - 1
 
 HERO_BASE_HP = 30       # constants.py
 HERO_BASE_AC = 12       # constants.py
@@ -80,11 +93,6 @@ NAME_MID = ["IL", "AN", "OR", "UL", "AR", "EN", "YR", ""]
 NAME_TAIL = ["DRANE", "LM", "WULF", "TYR", "HOR", "DUR", "GAR", "NIS",
              "MOR", "RIK", "THAS", "VEN", "DAR", "LOK", "RETH", "SON"]
 
-CLASS_ABBREV = {
-    "Barbarian": "BA", "Bard": "BD", "Cleric": "CL", "Druid": "DR",
-    "Fighter": "FI", "Monk": "MO", "Paladin": "PA", "Ranger": "RA",
-    "Rogue": "RO", "Sorcerer": "SO", "Wizard": "WI",
-}
 
 
 def load_rules():
@@ -118,7 +126,8 @@ def load_rules():
                 grp = max(1, min(4, 60 // max(1, hp)))
                 data["monsters"].append({"name": shown, "src": src, "img": img,
                                          "ac": st["ac"], "hp": hp,
-                                         "str": st["strength"], "dcnt": cnt,
+                                         "str": st["strength"],
+                                         "dex": st["dexterity"], "dcnt": cnt,
                                          "dside": sides, "grp": grp})
             with io.open(SNAPSHOT, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=1)
@@ -292,55 +301,62 @@ def main():
     A("")
 
     # ---- 직업표 ----
-    A("; --- 직업 (race_job.py CLASS_DATA + hero.py apply_class_stats) ----------")
+    A("; --- 직업 (quest_sena.md 의 다섯. BAB 만 race_job.py 에서 온다) ---------")
     A("; 히트다이스, BAB 진행(0 good/1 average/2 poor), 능력치 보정 6,")
-    A("; 피해 주사위 개수/면, 약자 2, 이름 10")
+    A("; 피해 주사위 개수/면, 캐스터 여부, 약자 2, 이름 10")
     to_const()
-    A("CLASS_N      equ %d" % len(R["classes"]))
-    A("CLASS_STRIDE equ 22")
+    A("CLASS_N      equ %d" % len(GAME_CLASSES))
+    A("CLASS_STRIDE equ 23")
     A("C_HITDIE     equ 0")
     A("C_BAB        equ 1")
     A("C_MODS       equ 2")
     A("C_DCNT       equ 8")
     A("C_DSIDE      equ 9")
-    A("C_ABBREV     equ 10")
-    A("C_NAME       equ 12")
+    A("C_CASTER     equ 10                ; MP 를 쓰는 직업인가")
+    A("C_ABBREV     equ 11")
+    A("C_NAME       equ 13")
+    A("MAX_LEVEL    equ %d" % MAX_LEVEL)
     to_data()
     A("ClassTable:")
     babmap = {"good": 0, "average": 1, "poor": 2}
-    for c in R["classes"]:
-        bon = CLASS_BONUS.get(c["name"], {})
+    for name, die, bab, ab, caster, bon, dmg in GAME_CLASSES:
         mods = [bon.get(k, 0) for k in ("str", "dex", "con", "int", "wis", "cha")]
-        dcnt, dside = bon.get("dmg", (1, max(4, c["hit_die"])))
-        A("    ; %s" % c["name"])
-        A("    db %d, %d" % (c["hit_die"], babmap[c["bab"]]))
+        A("    ; %s" % name)
+        A("    db %d, %d" % (die, babmap[bab]))
         A(db_sbytes(mods))
-        A("    db %d, %d" % (dcnt, dside))
-        A(db_str(CLASS_ABBREV[c["name"]]))
-        A(db_str(pad(c["name"], 10)))
+        A("    db %d, %d" % dmg)
+        A("    db %d" % caster)
+        A(db_str(ab))
+        A(db_str(pad(name, 10)))
+    A("")
+    A("; 레벨별 최대 MP (quest_sena.md). 색인이 레벨이라 0 번은 안 쓴다.")
+    A("MpTable:")
+    A("    db " + ", ".join(str(v) for v in MP_BY_LEVEL))
     A("")
 
     # ---- 몬스터표 ----
     A("; --- 몬스터 (battlefield.py monster_pool + monster_stats.py) ------------")
-    A("; AC, HP, 힘, 피해 개수/면, 이름 12")
+    A("; AC, HP, 힘, 피해 개수/면, 무리 최대, 민첩, 그림, 이름 11")
     to_const()
     A("MONSTER_N    equ %d" % len(R["monsters"]))
-    A("MON_TSTRIDE  equ 20")
+    A("MON_TSTRIDE  equ 21")
     A("T_AC         equ 0")
     A("T_HP         equ 1")
     A("T_STR        equ 2")
     A("T_DCNT       equ 3")
     A("T_DSIDE      equ 4")
     A("T_MAXGRP     equ 5                 ; 한 번에 몇 마리까지 나오는가")
-    A("T_SPRBANK    equ 6                 ; 그림이 든 ROM 뱅크")
-    A("T_SPRADDR    equ 7                 ; 그 뱅크 안의 주소")
-    A("T_NAME       equ 9")
+    A("T_DEX        equ 6                 ; 민첩 - 라운드당 행동 횟수를 정한다")
+    A("T_SPRBANK    equ 7                 ; 그림이 든 ROM 뱅크")
+    A("T_SPRADDR    equ 8                 ; 그 뱅크 안의 주소")
+    A("T_NAME       equ 10")
     to_data()
     A("MonsterTable:")
     for i, m in enumerate(R["monsters"]):
         A("    ; %-6s  <- monster_stats.py %s" % (m["name"], m.get("src", m["name"])))
-        A("    db %d, %d, %d, %d, %d, %d" % (m["ac"], min(255, m["hp"]), m["str"],
-                                             m["dcnt"], m["dside"], m["grp"]))
+        A("    db %d, %d, %d, %d, %d, %d, %d" % (m["ac"], min(255, m["hp"]), m["str"],
+                                                 m["dcnt"], m["dside"], m["grp"],
+                                                 m["dex"]))
         A("    db SPR_BANK_%d" % i)
         A("    dw SPR_ADDR_%d" % i)
         A(db_str(pad(m["name"], 11)))
@@ -386,7 +402,7 @@ def main():
     print("wrote src/questrules.asm (%d 줄), src/questruledata.asm (%d 줄)"
           % (len(L), len(D)))
     print("  종족 %d, 직업 %d, 몬스터 %d, 폰트 %d 바이트"
-          % (len(R["races"]), len(R["classes"]), len(R["monsters"]), len(fd)))
+          % (len(R["races"]), len(GAME_CLASSES), len(R["monsters"]), len(fd)))
 
 
 if __name__ == "__main__":

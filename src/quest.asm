@@ -151,8 +151,15 @@ SprLen      ds 1
 ; 전투 진행
 MonCount    ds 1                ; 이번에 나온 마릿수
 MonKind     ds 1                ; 나온 종류 (한 무리는 한 종류다)
-TurnHero    ds 1                ; 이번 라운드에서 다음에 칠 영웅
+TurnHero    ds 1                ; 이번 차례에서 다음에 칠 영웅
 TurnMon     ds 1                ; 다음에 칠 몬스터
+
+; 민첩이 정하는 행동 횟수 (quest_sena.md 의 전투방식)
+DexMin      ds 1                ; 이 라운드에 싸우는 것들 중 가장 낮은 민첩
+ActHero     ds PARTY_N          ; 사람마다 이번 라운드의 행동 횟수
+ActMon      ds 1                ; 몬스터의 행동 횟수 (한 무리는 한 종류라 하나면 된다)
+ActPass     ds 1                ; 지금 몇 번째 바퀴인가 (1 부터)
+PassActed   ds 1                ; 이 바퀴에 누구라도 움직였는가
 StepCount   ds 1                ; 마주치기 판정용 걸음 수
 
 ; 지도 표시

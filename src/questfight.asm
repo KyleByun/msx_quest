@@ -432,48 +432,94 @@ DamageHero:
 ;-----------------------------------------------------------------------------
 ; 라운드 하나 - 한 명씩 번갈아 친다
 ;-----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------
+; 라운드 하나.
+;
+; 민첩이 행동 횟수를 정한다(quest_sena.md 의 전투방식).
+;
+;   행동 횟수 = floor(내 민첩 / 이 전장의 최저 민첩)
+;
+; 그래서 한 라운드는 **여러 바퀴**로 돈다. 첫 바퀴에는 모두가 한 번씩 치고,
+; 둘째 바퀴에는 행동 횟수가 2 이상인 것만 다시 친다. 아무도 못 움직이는 바퀴가
+; 나오면 라운드가 끝난다.
+;
+; 바퀴 안에서는 예전처럼 우리 편 하나 / 상대 하나로 번갈아 간다. 오른쪽 창에
+; 주고받는 것이 그대로 흘러가는 것이 이 화면의 전부라, 순서를 바꾸면 읽기가
+; 나빠진다. 빠른 쪽은 뒤쪽 바퀴에서 한 번 더 나오는 것으로 드러난다.
+;-----------------------------------------------------------------------------
 BattleRound:
     ld hl, TxtRound
     call MsgAddStr
     ld a, (RoundNo)
     call MsgAddNum
     call MsgFlush
+    call CalcActs               ; 이 라운드의 행동 횟수를 정한다
+    ld a, 1
+    ld (ActPass), a
+
+.pass:
     xor a
     ld (TurnHero), a
     ld (TurnMon), a
+    ld (PassActed), a
 
 .turn:
     ld a, (TurnHero)            ; 우리 편 한 명
     cp PARTY_N
     jr nc, .nohero
-    push af
+    ld hl, ActHero              ; 이번 바퀴에 움직일 차례인가
+    call AddA
+    ld a, (ActPass)
+    cp (hl)
+    jr z, .heroacts
+    jr nc, .heroskip
+.heroacts:
+    ld a, 1
+    ld (PassActed), a
+    ld a, (TurnHero)
     call HeroAttack
-    pop af
-    inc a
-    ld (TurnHero), a
     call CountMonsters
     or a
     jr z, .won
+.heroskip:
+    ld hl, TurnHero
+    inc (hl)
 .nohero:
     ld a, (TurnMon)             ; 상대 한 마리
     cp MON_N
     jr nc, .nomon
-    push af
+    ld a, (ActPass)
+    ld hl, ActMon
+    cp (hl)
+    jr z, .monacts
+    jr nc, .monskip
+.monacts:
+    ld a, 1
+    ld (PassActed), a
+    ld a, (TurnMon)
     call MonAttack
-    pop af
-    inc a
-    ld (TurnMon), a
     call CountHeroes
     or a
     jr z, .lost
+.monskip:
+    ld hl, TurnMon
+    inc (hl)
 .nomon:
-    ld a, (TurnHero)            ; 둘 다 끝났으면 라운드 끝
+    ld a, (TurnHero)            ; 둘 다 끝났으면 이 바퀴가 끝
     cp PARTY_N
     jr c, .turn
     ld a, (TurnMon)
     cp MON_N
     jr c, .turn
 
+    ld a, (PassActed)           ; 아무도 못 움직였으면 라운드도 끝
+    or a
+    jr z, .roundend
+    ld hl, ActPass
+    inc (hl)
+    jr .pass
+
+.roundend:
     ld a, (RoundNo)
     inc a
     ld (RoundNo), a
@@ -491,6 +537,116 @@ BattleRound:
     call MsgFlush
     call EndBattle
     jp DrawParty
+
+; HL += A. A 파괴.
+AddA:
+    add a, l
+    ld l, a
+    ret nc
+    inc h
+    ret
+
+;-----------------------------------------------------------------------------
+; 이 라운드의 행동 횟수를 정한다.
+;
+; 최저 민첩은 **살아 있는 것들만** 보고 라운드 시작에 한 번 정한 뒤 그대로 쓴다.
+; 라운드 도중에 다시 재면 누가 쓰러질 때마다 남은 모두의 행동 횟수가 바뀌어서,
+; 화면으로도 검증으로도 따라가기 어렵다.
+;
+; 나누는 값이므로 0 이면 안 된다. 살아 있는 것이 없거나 민첩이 0 이면 1 로 둔다.
+; 몬스터는 한 무리가 한 종류라 민첩도 하나뿐이다.
+;-----------------------------------------------------------------------------
+CalcActs:
+    ld a, 255
+    ld (DexMin), a
+
+    ld b, PARTY_N               ; 살아 있는 사람 중 가장 낮은 민첩
+    ld c, 0
+.dexhero:
+    push bc
+    ld a, c
+    call PartyPtr
+    ld de, P_HP
+    add hl, de
+    ld a, (hl)
+    or a
+    jr z, .dexhnext             ; 쓰러진 사람은 세지 않는다
+    ld de, P_DEX - P_HP
+    add hl, de
+    ld a, (hl)
+    ld hl, DexMin
+    cp (hl)
+    jr nc, .dexhnext
+    ld (hl), a
+.dexhnext:
+    pop bc
+    inc c
+    djnz .dexhero
+
+    call CountMonsters          ; 몬스터가 남아 있으면 그 종류의 민첩도 본다
+    or a
+    jr z, .havemin
+    call MonDex
+    ld hl, DexMin
+    cp (hl)
+    jr nc, .havemin
+    ld (hl), a
+.havemin:
+    ld a, (DexMin)
+    or a
+    jr nz, .minok
+    inc a
+.minok:
+    cp 255                      ; 아무도 안 남았으면 (있을 수 없지만) 1 로
+    jr nz, .minok2
+    ld a, 1
+.minok2:
+    ld (DexMin), a
+
+    ld b, PARTY_N               ; 사람마다 민첩 / 최저민첩
+    ld c, 0
+.acthero:
+    push bc
+    ld a, c
+    call PartyPtr
+    ld de, P_DEX
+    add hl, de
+    ld e, (hl)
+    call ActsFor                ; A = 행동 횟수
+    pop bc
+    push af                     ; 주소를 구하는 동안 A 를 지킨다.
+    ld hl, ActHero              ; AddA 가 A 를 주소 계산에 쓰므로 그냥 두면
+    ld a, c                     ; 횟수 대신 주소 하위 바이트가 저장된다.
+    call AddA
+    pop af
+    ld (hl), a
+    inc c
+    djnz .acthero
+
+    call MonDex                 ; 몬스터도 한 번
+    ld e, a
+    call ActsFor
+    ld (ActMon), a
+    ret
+
+; A = 지금 무리의 민첩. HL, BC, DE 파괴.
+MonDex:
+    ld a, (MonKind)
+    call MonTypePtr
+    ld de, T_DEX
+    add hl, de
+    ld a, (hl)
+    ret
+
+; E = 민첩 -> A = 행동 횟수 (최소 1). BC, DE, HL 파괴.
+ActsFor:
+    ld a, (DexMin)
+    ld c, a
+    call Div8                   ; E / C -> A 몫
+    or a
+    ret nz
+    inc a                       ; 0 번 움직이는 것은 없다
+    ret
 
 ; 전투를 끝낸다. 몬스터 그림을 지우려면 던전을 다시 그려야 한다.
 EndBattle:
