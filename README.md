@@ -52,6 +52,7 @@ Zanac 참고 이미지에서 뽑은 그래픽으로 만들었습니다. 어셈�
 .\verify.ps1         # 창 없이 부팅해 화면을 저장
 .\verify_quest.ps1
 .\verify_quest_sides.ps1   # 던전 화면 회귀 검증 (알려진 지도 여섯 개)
+\verify_quest_map.ps1     # 지도 48장의 연결성 + 안개 걷기 검증
 ```
 
 필요한 것은 **sjasmplus 1.23.1**, **openMSX 21.0**, **uv**(파이썬) 셋입니다. 도구 경로는 `tools.ps1` 한 곳에만 적혀 있습니다.
@@ -143,6 +144,7 @@ Combat alternates one attacker at a time, Bard's Tale style, with the log scroll
 .\verify.ps1         # boot headless and save a screenshot
 .\verify_quest.ps1
 .\verify_quest_sides.ps1   # dungeon render regression (six known maps)
+\verify_quest_map.ps1     # connectivity of 48 generated maps + fog reveal
 ```
 
 You need three things: **sjasmplus 1.23.1**, **openMSX 21.0**, and **uv** (for Python). Tool paths live in exactly one place, `tools.ps1`.

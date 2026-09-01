@@ -75,6 +75,12 @@ MakeLevel:
     ld (hl), 1
     ldir
 
+    ld hl, SeenRam              ; 새 층은 아무 데도 안 가 본 상태로 시작한다
+    ld de, SeenRam + 1
+    ld bc, MAP_W * MAP_W - 1
+    ld (hl), 0
+    ldir
+
     xor a
     ld (RoomCount), a
     ld c, 4
@@ -294,11 +300,17 @@ LinkRooms:
     ld hl, RoomCX
     ld c, (hl)                  ; C = 끝 x
     call CarveH
-    ld a, (RoomCX)              ; A = x  (CarveV 는 A=시작y, B=x, C=끝y)
-    ld hl, PrevRoomY
-    ld b, (hl)
+    ; 가로로 이미 새 방의 열까지 왔으니, 세로는 그 열에서 내려간다.
+    ;
+    ; 여기서 A 와 B 를 뒤바꿔 넘기고 있었다. 주석에 "CarveV 는 A=시작y, B=x" 라고
+    ; 적어 놓고도 A 에 x 를, B 에 y 를 넣었다. 그래서 엉뚱한 열에 통로가 하나 파이고
+    ; 새 방은 이어지지 않은 채로 남았다 - **지도 두 장 중 한 장꼴로 못 가는 방이
+    ; 생겼다.** 세로-먼저 갈래는 멀쩡했던 탓에 절반은 정상으로 보였다.
+    ld a, (PrevRoomY)           ; A = 시작 y
+    ld hl, RoomCX
+    ld b, (hl)                  ; B = x
     ld hl, RoomCY
-    ld c, (hl)
+    ld c, (hl)                  ; C = 끝 y
     jp CarveV
 
 ; A=y, B=시작 x, C=끝 x. 양 끝을 포함해 수평 통로를 판다.

@@ -15,6 +15,9 @@ MINIMAP_ROW_BYTES equ MAP_W * 3  ; 한 맵 행의 바이트 수 (셀당 3)
 
 MINIMAP_WALL_BYTE  equ COL_SHADE * 17   ; 회색 두 픽셀
 MINIMAP_FLOOR_BYTE equ COL_BLACK * 17   ; 검정 두 픽셀
+; 아직 안 가 본 칸은 양피지 색으로 둔다. MsgClear 가 창을 지우는 색과 같아서,
+; 걸어 다니면 빈 양피지 위로 지도가 조금씩 드러나는 것처럼 보인다.
+MINIMAP_UNSEEN_BYTE equ COL_CREAM * 17
 
 ; M 키가 새로 눌릴 때 지도 표시를 켜거나 끈다.
 ToggleMap:
@@ -44,13 +47,19 @@ DrawMap:
     ld de, MiniMapRow
     ld c, 0                      ; 현재 맵 x
 .cell:
+    inc h                       ; 같은 칸의 방문 기록 (SeenRam = MapDataRam + 256)
     ld a, (hl)
-    inc hl
+    dec h
+    or a
+    ld a, MINIMAP_UNSEEN_BYTE
+    jr z, .store                ; 아직 안 가 본 칸
+    ld a, (hl)
     or a
     ld a, MINIMAP_FLOOR_BYTE
     jr z, .store
     ld a, MINIMAP_WALL_BYTE
 .store:
+    inc hl
     ld (de), a                  ; 6픽셀 = 같은 색 두 픽셀 3바이트
     inc de
     ld (de), a

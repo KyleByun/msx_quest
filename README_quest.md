@@ -2,13 +2,14 @@
 
 Bard's Tale / Might and Magic / Wizardry 형태의 1인칭 던전 탐험. MSX2 SCREEN 5.
 
-**동작하는 것**: 참고 화면을 그대로 옮긴 배경, 좌상단 96×96 던전 뷰, **원근이 적용된 벽돌 벽·바닥·천장**, 칸 단위 이동과 90도 회전, 벽 충돌, 옆길이 뚫린 것이 보이는 통로, **D&D 규칙으로 만든 파티 여섯 명**, **몬스터 그림 여섯 종**, **Bard's Tale 식으로 주고받는 d20 전투**, **오른쪽 창에 흘러가는 전투 기록**, **NetHack 식 실행 시간 랜덤 맵 생성**, **M키 미니맵과 내 자리 방향 화살표**.
+**동작하는 것**: 참고 화면을 그대로 옮긴 배경, 좌상단 96×96 던전 뷰, **원근이 적용된 벽돌 벽·바닥·천장**, 칸 단위 이동과 90도 회전, 벽 충돌, 옆길이 뚫린 것이 보이는 통로, **D&D 규칙으로 만든 파티 여섯 명**, **몬스터 그림 여섯 종**, **Bard's Tale 식으로 주고받는 d20 전투**, **오른쪽 창에 흘러가는 전투 기록**, **NetHack 식 실행 시간 랜덤 맵 생성**, **M키 미니맵과 내 자리 방향 화살표**, **가 본 자리만 남는 안개 지도**.
 
 ```powershell
 .\build_quest.ps1                      # src/quest.asm -> build/quest.rom (128KB)
 .\verify_quest.ps1                     # 창 없이 부팅해 build/quest.png 저장
 .\verify_quest.ps1 -Keys "up,up,right" # 키를 넣은 뒤의 화면을 확인
 .\verify_quest_sides.ps1               # 던전 화면을 알려진 지도 여섯 개로 회귀 검증
+\verify_quest_map.ps1                 # 지도 48장의 연결성 + 안개 걷기
 
 uv run --with pillow python gfx\quest_convert.py   # 배경/런테이블/맵 재생성
 uv run --with pillow python gfx\quest_rules.py     # D&D 표, 폰트, 몬스터 그림 재생성

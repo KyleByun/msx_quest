@@ -187,21 +187,30 @@ ExpandTbl   ds 32
 Party       ds PARTY_N * PARTY_STRIDE
 Monsters    ds MON_N * MON_STRIDE
 
-; 실행 시간 맵 생성의 결과 지도. 1=벽, 0=통로. IsWall 이 여기를 본다.
-; RamEnd 뒤에 두면 Init 의 0 지우기에서 빠지므로 RamEnd 앞에 둔다.
-MapDataRam  ds MAP_W * MAP_W
-
 ; 미니맵 한 행分 (questmap.asm). 맵 한 칸 = 3바이트.
 MiniMapRow  ds MAP_W * 3
+
+; 실행 시간 맵 생성의 결과 지도(1=벽, 0=통로)와 가 본 자리 기록(0=아직).
+;
+; 둘 다 페이지 머리에 두고 **SeenRam 을 MapDataRam 바로 다음 페이지**에 놓는다.
+; 색인이 (y<<4)|x 로 같으므로 ld h,MapDataRam>>8 / ld l,색인 으로 지도를 짚고
+; inc h 한 번이면 같은 칸의 방문 기록으로 넘어간다. 미니맵은 한 칸마다 둘 다
+; 봐야 하는데 이 배치면 주소 계산이 한 번뿐이다.
+;
+; RamEnd 뒤에 두면 Init 의 0 지우기에서 빠지므로 RamEnd 앞에 둔다.
+    ORG 0xC600
+MapDataRam  ds MAP_W * MAP_W
+    ORG 0xC700
+SeenRam     ds MAP_W * MAP_W
 
 ; 면 상태 표. 면 번호로 바로 짚을 수 있게 페이지 머리에 둔다.
 ; ld d,Vis>>8 / ld e,면번호 / ld a,(de) 세 줄이면 상태가 나온다.
 ;
 ; VisPost 는 Vis 의 **바로 다음 페이지**다. 옆면을 그린 뒤 남은 블록을 건너뛸
 ; 바이트 수가 거기 있는데, inc d 한 번이면 옮겨 가므로 면 번호(E)를 그대로 쓴다.
-    ORG 0xC500
+    ORG 0xC800
 Vis         ds 64
-    ORG 0xC600
+    ORG 0xC900
 VisPost     ds 64
 RamEnd:
 
@@ -255,6 +264,7 @@ Init:
 
     call SeedRng                ; RTC + R 레지스터로 시드를 만들고
     call MakeLevel              ; NetHack 식으로 방과 통로를 파 놓는다
+    call RevealAround           ; 시작 자리 둘레는 처음부터 보인다
 
     call MakeParty
     call DrawParty
@@ -287,10 +297,59 @@ MainLoop:
 ; 이동이 있었고 지도가 켜져 있으면 미니맵을 다시 그린다.
 ; ---------------------------------------------------------------------------
 AfterMove:
+    call RevealAround           ; 지도를 안 보고 있어도 기록은 남겨야 한다
     ld a, (MapOn)
     or a
     ret z
     jp DrawMap
+
+;-----------------------------------------------------------------------------
+; 내 자리 둘레 3x3 을 '가 봤다'로 표시한다.
+;
+; 미니맵은 이 기록이 있는 칸만 그린다. 이미 표시된 칸은 다시 쓰지 않는다 - 한 걸음
+; 옮기면 아홉 칸 중 여섯 칸은 직전에 이미 본 자리다.
+;
+; 맵 밖은 부호 없는 비교 하나로 걸러진다. x 가 0 일 때 x-1 은 0xFF 가 되는데
+; MAP_W 보다 크므로 그대로 걸린다.
+;-----------------------------------------------------------------------------
+RevealAround:
+    ld a, (posY)
+    dec a
+    ld c, a                     ; C = 볼 줄
+    ld b, 3
+.row:
+    ld a, c
+    cp MAP_W
+    jr nc, .nextrow
+    push bc
+    ld a, (posX)
+    dec a
+    ld e, a                     ; E = 볼 칸
+    ld b, 3
+.col:
+    ld a, e
+    cp MAP_W
+    jr nc, .nextcol
+    ld a, c
+    add a, a
+    add a, a
+    add a, a
+    add a, a                    ; y * 16
+    add a, e                    ; + x
+    ld l, a
+    ld h, SeenRam >> 8
+    ld a, (hl)
+    or a
+    jr nz, .nextcol             ; 이미 본 자리는 건드리지 않는다
+    ld (hl), 1
+.nextcol:
+    inc e
+    djnz .col
+    pop bc
+.nextrow:
+    inc c
+    djnz .row
+    ret
 
 ;-----------------------------------------------------------------------------
 ; 페이지 2 를 카트리지 슬롯으로 전환
