@@ -34,7 +34,7 @@ Zanac 참고 이미지에서 뽑은 그래픽으로 만들었습니다. 어셈�
 
 칸 단위 이동에 90도 회전만 있는 Wizardry / Bard's Tale 형식입니다. **실행 중에 레이캐스팅을 하지 않습니다.**
 
-칸 단위로만 움직이면 화면에 나올 벽면의 모양이 서 있는 위치와 무관하게 언제나 같습니다. 모양이 상수면 그 위에 입히는 텍스처도 상수입니다. 그래서 화면좌표 → 텍스처좌표 변환을 **원근 나눗셈까지 포함해 빌드 시점에 전부 풀어 픽셀로 구워** 둡니다. 실행 중에 Z80 이 하는 일은 "이 칸이 벽인가"를 보고 바이트를 옮기는 것뿐입니다. 한 번 다시 그리는 데 **97ms** 입니다.
+칸 단위로만 움직이면 화면에 나올 벽면의 모양이 서 있는 위치와 무관하게 언제나 같습니다. 모양이 상수면 그 위에 입히는 텍스처도 상수입니다. 그래서 화면좌표 → 텍스처좌표 변환을 **원근 나눗셈까지 포함해 빌드 시점에 전부 풀어 픽셀로 구워** 둡니다. 실행 중에 Z80 이 하는 일은 "이 칸이 벽인가"를 보고 바이트를 옮기는 것뿐입니다. 한 번 다시 그리는 데 **99ms** 입니다.
 
 파티와 전투는 파이썬으로 짜 둔 D&D 구현에서 **판정 계층을 그대로 옮겼습니다.** 능력치 보정과 기본 공격 보정은 파이썬 원본을 빌드할 때 실제로 실행해서 표로 구워 넣습니다 — `(점수-10)//2` 의 내림 나눗셈이나 `int(레벨*0.75)` 같은 것을 Z80 에서 흉내 내면 틀리기 쉽기 때문입니다.
 
@@ -51,7 +51,7 @@ Zanac 참고 이미지에서 뽑은 그래픽으로 만들었습니다. 어셈�
 .\run.ps1            # game.rom 을 창으로 실행
 .\verify.ps1         # 창 없이 부팅해 화면을 저장
 .\verify_quest.ps1
-.\verify_quest_sides.ps1   # 던전 옆면 회귀 검증 (알려진 지도 세 개)
+.\verify_quest_sides.ps1   # 던전 화면 회귀 검증 (알려진 지도 여섯 개)
 ```
 
 필요한 것은 **sjasmplus 1.23.1**, **openMSX 21.0**, **uv**(파이썬) 셋입니다. 도구 경로는 `tools.ps1` 한 곳에만 적혀 있습니다.
@@ -66,7 +66,7 @@ Zanac 참고 이미지에서 뽑은 그래픽으로 만들었습니다. 어셈�
 |---|---|
 | [`doc/build_setup.md`](doc/build_setup.md) | 빌드 환경과 절차, sjasmplus 함정 |
 | [`doc/z80_mult_div.md`](doc/z80_mult_div.md) | Z80 곱셈·나눗셈 ([Grauw 문서](https://map.grauw.nl/articles/mult_div_shifts.php) 정리) |
-| [`doc/random_map.md`](doc/random_map.md) | NetHack 식 랜덤 맵 생성, 미니맵·나침반, 입력 확장 |
+| [`doc/random_map.md`](doc/random_map.md) | NetHack 식 랜덤 맵 생성, 미니맵과 방향 화살표, 입력 확장 |
 | [`README_game.md`](README_game.md) | 슈팅 게임 — 처리량, 하드웨어 스크롤, 스프라이트 한계 |
 | [`README_quest.md`](README_quest.md) | 던전 게임 — 원근 굽기, D&D 포팅, 겪은 버그들 |
 
@@ -125,7 +125,7 @@ It has enemies, post-hit invulnerability, rising difficulty, a mid-boss at 2 min
 
 Wizardry / Bard's Tale style: you move one cell at a time and turn in 90-degree steps. **There is no raycasting at runtime.**
 
-If movement is restricted to whole cells, the shape of every wall surface on screen is always the same, regardless of where you are standing. And if the shape is constant, so is the texture laid over it. So the screen-to-texture coordinate transform — **perspective divide included — is solved entirely at build time and baked into pixels.** All the Z80 does at runtime is ask "is this cell a wall?" and move bytes. One full redraw takes **97ms**.
+If movement is restricted to whole cells, the shape of every wall surface on screen is always the same, regardless of where you are standing. And if the shape is constant, so is the texture laid over it. So the screen-to-texture coordinate transform — **perspective divide included — is solved entirely at build time and baked into pixels.** All the Z80 does at runtime is ask "is this cell a wall?" and move bytes. One full redraw takes **99ms**.
 
 The party and combat are a port of the **resolution layer** from a Python D&D implementation. Ability modifiers and base attack bonus are baked into lookup tables by *actually running the Python source at build time* — things like the floor division in `(score-10)//2` or `int(level*0.75)` are easy to get subtly wrong when reimplemented in Z80.
 
@@ -142,7 +142,7 @@ Combat alternates one attacker at a time, Bard's Tale style, with the log scroll
 .\run.ps1            # launch game.rom in a window
 .\verify.ps1         # boot headless and save a screenshot
 .\verify_quest.ps1
-.\verify_quest_sides.ps1   # dungeon side-face regression (three known maps)
+.\verify_quest_sides.ps1   # dungeon render regression (six known maps)
 ```
 
 You need three things: **sjasmplus 1.23.1**, **openMSX 21.0**, and **uv** (for Python). Tool paths live in exactly one place, `tools.ps1`.
@@ -157,7 +157,7 @@ Environment setup, how the 128KB ROM is assembled in three passes and stitched t
 |---|---|
 | [`doc/build_setup.md`](doc/build_setup.md) | Build environment and procedure, sjasmplus traps |
 | [`doc/z80_mult_div.md`](doc/z80_mult_div.md) | Z80 multiplication and division (notes on [Grauw's article](https://map.grauw.nl/articles/mult_div_shifts.php)) |
-| [`doc/random_map.md`](doc/random_map.md) | NetHack-style runtime level generation, minimap & compass, input extension |
+| [`doc/random_map.md`](doc/random_map.md) | NetHack-style runtime level generation, minimap & heading arrow, input extension |
 | [`README_game.md`](README_game.md) | The shooter — throughput, hardware scrolling, sprite limits |
 | [`README_quest.md`](README_quest.md) | The dungeon — baking perspective, porting D&D, bugs encountered |
 

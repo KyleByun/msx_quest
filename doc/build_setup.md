@@ -187,7 +187,7 @@ foreach ($f in $bankFiles) { ... [Array]::Copy($data, 0, $rom, $bankIndex * $BAN
 [System.IO.File]::WriteAllBytes("build\quest.rom", $rom)
 ```
 
-`questmain.bin` 이 정확히 24KB 인지 **어서션으로 확인합니다.** 본체가 24KB 를 넘으면 조용히 뱅크 3 을 밀어내서 그림이 깨집니다. 지금 본체는 20,073 / 24,576 바이트라 여유가 4,503 바이트입니다 (배경 RLE 를 뱅크 5 로 뺀 뒤).
+`questmain.bin` 이 정확히 24KB 인지 **어서션으로 확인합니다.** 본체가 24KB 를 넘으면 조용히 뱅크 3 을 밀어내서 그림이 깨집니다. 지금 본체는 22,198 / 24,576 바이트라 여유가 2,378 바이트입니다 (배경 RLE 를 뱅크 5 로 뺀 뒤).
 
 ## 4. sjasmplus 로 카트리지 롬을 만들 때 알아야 할 것
 

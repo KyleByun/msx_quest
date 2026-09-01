@@ -65,12 +65,32 @@ frontX      ds 1
 frontW      ds 1
 cellX       ds 1                ; 지금 보고 있는 구간의 칸
 cellY       ds 1
-cellX2      ds 1                ; 그 한 칸 앞 (옆면은 두 칸을 다 봐야 정해진다)
-cellY2      ds 1
+
+; 옆면 상태를 정하는 동안 쓰는 자리. BuildVisibility 는 한 프레임에 한 번만
+; 도니까 레지스터를 아끼는 것보다 이름을 붙여 두는 편이 낫다 - 이 프로젝트에서
+; 레지스터를 뭉갠 버그를 다섯 번 겪었다.
+segJ        ds 1                ; 지금 보는 구간 번호
+sideRot     ds 1                ; 3 = 왼쪽, 1 = 오른쪽
+faceF       ds 1                ; 면 번호 f = j*2 + 쪽
+faceW       ds 1                ; 그 면의 띠 안 런 폭 (바이트)
+selK        ds 1                ; 0 = 옆칸이 벽, 1..NSEG = 그 평면에서 만남, 0xFF = 없음
+scanK       ds 1                ; 지금 보고 있는 평면
+bandId      ds 1                ; 지금 채우는 띠 번호
+bandK       ds 1
+bandCap     ds 1                ; 그릴 수 있는 블록 번호의 한계
+bandLim     ds 1                ; 이 띠의 마지막 블록 번호
+bandPre     ds 1                ; 그리기 전에 건너뛸 바이트
+bandPost    ds 1                ; 그린 뒤 건너뛸 바이트
+fdx         ds 1                ; 바라보는 쪽으로 한 칸 (한 프레임에 한 번 구한다)
+fdy         ds 1
+sdx         ds 1                ; 지금 보는 옆쪽으로 한 칸
+sdy         ds 1
+rayX        ds 1                ; 평면을 하나씩 옮겨 가며 보는 칸
+rayY        ds 1
+lastM       ds 1                ; 그 칸이 옆으로 몇 칸 나가 있었는가
 VarsEnd:
 
     ORG 0xC100
-Vis         ds 32
 
 ; 회전 애니메이션용
 turnAngle   ds 1                ; 0~255. 회전 중에만 뜻이 있다.
@@ -104,6 +124,13 @@ RayBuf      ds (VIEW_W / 2) * VIEW_H     ; 48 * 96 = 4608
 BlitSrc     ds 2
 BlitRow     ds 1
 BlitRowsLeft ds 1
+; 면 상태 표. 면 번호로 바로 짚을 수 있게 페이지 머리에 둔다. VisPost 는 Vis 의
+; 바로 다음 페이지라 inc d 한 번으로 옮겨 간다. (quest.asm 과 같은 구조인데,
+; 여기는 RayBuf 가 0xC500 을 차지하고 있어서 그 뒤에 둔다.)
+    ORG 0xD400
+Vis         ds 64
+    ORG 0xD500
+VisPost     ds 64
 RamEnd:
 
 STACK_TOP   equ 0xF380
@@ -604,51 +631,60 @@ RenderDungeon:
     ld c, VDP_DATA
     ld d, Vis >> 8
 .run:
-    ld a, (hl)
+    ld a, (hl)                  ; 면 번호
     inc hl
     ld e, a
-    ld a, (hl)
+    ld a, (hl)                  ; 바이트 폭
     inc hl
     or a
-    jp z, .eol
+    jp z, .eol                  ; 폭 0 은 줄의 끝
     ld b, a
-    ld a, (de)
+    ld a, (de)                  ; 그 면의 상태
     or a
-    jr z, .draw1
-    cp VIS_WALL3
-    jr z, .wall3
-    cp VIS_OPEN3
-    jr z, .open3
-    cp VIS_GAP3
-    jr z, .gap3
+    jr z, .draw1                ; VIS_TEX - 가장 흔하므로 맨 앞
+    cp VIS_OFS
+    jr nc, .ofs                 ; VIS_OFS 이상 = 옆면 띠 안 (상수 오프셋)
+    cp VIS_WALL2
+    jr z, .wall2
+    cp VIS_GAP2
+    jr z, .gap2
+    cp VIS_SKIP
+    jp z, .skip1                ; 핸들러가 멀어 jr 사거리를 넘는다
     cp VIS_BLACK
     jr z, .black
-    cp VIS_SKIP
-    jr z, .skip1
-    ; VIS_SKIP3 - 삼중 블록을 셋 다 건너뛴다
-    ld a, b
+    cp VIS_SKIP2
+    jp z, .skip2
+    ; VIS_SKIPN - 블록을 전부 건너뛴다. 총 바이트 수가 VisPost 에 있다.
+    xor a
+    ld (addrOk), a
+    inc d
+    ld a, (de)
+    dec d
     add a, l
     ld l, a
-    jr nc, $ + 3
+    jp nc, .run
     inc h
-    ld a, b
-    add a, l
-    ld l, a
-    jr nc, $ + 3
-    inc h
-    jp .skip1
+    jp .run
 
-.draw1:
-    ld a, (addrOk)
+.draw1:                         ; 단일 블록 (천장/바닥/한가운데)
+    ld a, (addrOk)              ; CheckAddr 인라인 - 핫 패스라 call 값이 아깝다
     or a
     call z, ResumeAddr
 .t1:
-    outi
-    nop
-    jp nz, .t1
-    jp .run
+    outi                        ; 16
+    nop                         ;  4
+    jp nz, .t1                  ; 10  -> 합 30 T-state
+    jp .run                     ; outi 가 이미 HL 을 끝까지 밀었다
 
-.wall3:
+; 옆면 '띠 안'. 블록 수가 면 번호마다 다르지만, 띠 안에서는 런 폭이 한 값으로
+; 정해져 있어서(quest_convert.py 가 확인한다) "블록 n 개 건너뛰기"가 상수
+; 바이트 수가 된다. 그래서 세는 루프 없이 더하기 두 번으로 끝난다.
+.ofs:
+    sub VIS_OFS                 ; 앞에서 건너뛸 바이트 수
+    add a, l
+    ld l, a
+    jr nc, $ + 3                ; inc h 한 바이트를 건너뛴다
+    inc h
     ld a, (addrOk)
     or a
     call z, ResumeAddr
@@ -658,19 +694,16 @@ RenderDungeon:
     nop
     jp nz, .t2
     pop bc
-    ld a, b
+    inc d                       ; 그린 뒤 남은 바이트 수
+    ld a, (de)
+    dec d
     add a, l
     ld l, a
-    jr nc, $ + 3
+    jp nc, .run
     inc h
-    jr .advance
+    jp .run
 
-.open3:
-    ld a, b
-    add a, l
-    ld l, a
-    jr nc, $ + 3
-    inc h
+.wall2:                         ; 띠 바깥 - 앞(벽면)을 그리고 뒤는 건너뛴다
     ld a, (addrOk)
     or a
     call z, ResumeAddr
@@ -682,12 +715,7 @@ RenderDungeon:
     pop bc
     jr .advance
 
-.gap3:
-    ld a, b
-    add a, l
-    ld l, a
-    jr nc, $ + 3
-    inc h
+.gap2:                          ; 띠 바깥 - 앞을 건너뛰고 뒤(뚫림)를 그린다
     ld a, b
     add a, l
     ld l, a
@@ -700,30 +728,36 @@ RenderDungeon:
     outi
     nop
     jp nz, .t4
-    jp .run
+    jp .run                     ; 마지막 블록이라 더 밀 것이 없다
 
-.black:
+.black:                         ; 통로 끝의 어둠
     ld a, (addrOk)
     or a
     call z, ResumeAddr
     push bc
     ld a, BLACK_BYTE
 .bl:
-    out (VDP_DATA), a
-    nop
-    dec b
-    jp nz, .bl
+    out (VDP_DATA), a           ; 11
+    nop                         ;  4
+    dec b                       ;  4
+    jp nz, .bl                  ; 10  -> 합 29 T-state
     pop bc
     jr .advance
 
-.skip1:
-    xor a
-    ld (addrOk), a
-.advance:
+.skip2:                         ; 두 블록을 다 건너뛴다 - 한 번 밀고 아래로 이어진다
     ld a, b
     add a, l
     ld l, a
-    jp nc, .run                 ; 분기가 늘어 jr 사거리를 넘었다
+    jr nc, $ + 3
+    inc h
+.skip1:                         ; 정면 벽에 가려진다 - 그리지 않고 지나간다
+    xor a
+    ld (addrOk), a
+.advance:
+    ld a, b                     ; HL += 폭 (블록 하나만큼)
+    add a, l
+    ld l, a
+    jp nc, .run                 ; 분기 처리가 늘어 jr 사거리를 넘었다 (jp 가 오히려 1 T 빠르다)
     inc h
     jp .run
 
@@ -846,7 +880,19 @@ ResumeAddr:
 ; 면 상태 정하기 - quest.asm 과 완전히 같다.
 ;-----------------------------------------------------------------------------
 BuildVisibility:
-    ld a, MAXD + 1
+    ld a, (facing)              ; 앞으로 한 칸 가는 델타. 여기서 한 번만 구한다.
+    add a, a
+    ld l, a
+    ld h, 0
+    ld de, DirTab
+    add hl, de
+    ld a, (hl)
+    ld (fdx), a
+    inc hl
+    ld a, (hl)
+    ld (fdy), a
+
+    ld a, MAXD + 1              ; 앞으로 몇 칸 만에 막히는지 찾는다
     ld (blockDepth), a
     ld b, 1
 .scan:
@@ -866,6 +912,8 @@ BuildVisibility:
     jr c, .scan
 .scandone:
 
+    ; 줄의 왼쪽 덩어리는 언제나 뷰포트 왼쪽 끝에서 시작한다. 건너뛴 뒤 다시
+    ; 시작할 x 는 정면 벽 사각형의 오른쪽 끝이다.
     ld a, VIEW_X / 2
     ld (resumeX), a
     ld a, (blockDepth)
@@ -875,95 +923,370 @@ BuildVisibility:
     call FrontPtr
     inc hl
     inc hl
-    ld a, (hl)
+    ld a, (hl)                  ; xByte
     inc hl
-    add a, (hl)
+    add a, (hl)                 ; + 바이트폭 = 사각형의 오른쪽 끝
     ld (resumeX), a
 
-    ld a, VIS_SKIP
+    ld a, VIS_SKIP              ; 한가운데는 정면 벽이 덮는다
     jr .setcentre
 .centreopen:
-    ld a, VIS_BLACK
+    ld a, VIS_BLACK             ; 끝까지 안 막혔으면 어둠
 .setcentre:
     ld c, CENTRE_ID
     call SetVis
 
-    ld b, 0
+    xor a                       ; 구간마다 면의 상태를 정한다
+    ld (segJ), a
 .each:
-    ld a, b
+    ld a, (segJ)
+    add a, a                    ; 천장 = j*2, 바닥 = j*2+1
+    ld c, a
+    ld a, (segJ)
     ld hl, blockDepth
     cp (hl)
-    jr c, .openseg
+    jr c, .openseg              ; 이 구간은 아직 막히기 전
 
-    ld a, b
-    call SegBase
-    ld c, a
-    ld a, VIS_SKIP
-    call SetVis
+    ld a, VIS_SKIP              ; 막힌 칸부터 안쪽은 전부 정면 벽이 덮는다
+    call SetVis                 ; 천장
     inc c
-    call SetVis
-    inc c
-    ld a, VIS_SKIP3
-    call SetVis
-    inc c
-    call SetVis
+    call SetVis                 ; 바닥
+    ld a, 3
+    call SideSkip               ; 왼쪽
+    ld a, 1
+    call SideSkip               ; 오른쪽
     jr .eachnext
 
 .openseg:
-    ld a, b
-    call SegBase
-    ld c, a
     ld a, VIS_TEX
-    call SetVis
+    call SetVis                 ; 천장
     inc c
-    ld a, VIS_TEX
-    call SetVis
+    call SetVis                 ; 바닥
 
-    ld a, b                     ; 옆면은 이 칸과 그 한 칸 앞을 함께 봐야 한다
+    ld a, (segJ)                ; 옆칸을 보려면 이 구간의 칸이 필요하다
     call CellAhead
     ld a, d
     ld (cellX), a
     ld a, e
     ld (cellY), a
-    ld a, b
-    inc a
-    call CellAhead
-    ld a, d
-    ld (cellX2), a
-    ld a, e
-    ld (cellY2), a
 
-    ld a, 3
+    ld a, 3                     ; 왼쪽 (facing - 1)
     call SideVis
-    push af
-    ld a, b
-    call SegBase
-    add a, 2
-    ld c, a
-    pop af
-    call SetVis
-
-    ld a, 1
+    ld a, 1                     ; 오른쪽 (facing + 1)
     call SideVis
-    push af
-    ld a, b
-    call SegBase
-    add a, 3
-    ld c, a
-    pop af
-    call SetVis
 
 .eachnext:
-    inc b
-    ld a, b
+    ld hl, segJ
+    inc (hl)
+    ld a, (hl)
     cp NSEG
     jp c, .each
     ret
 
-; A = 구간 번호 j -> A = 그 구간의 면 번호 시작값 j*4. BC 보존.
-SegBase:
+;-----------------------------------------------------------------------------
+; 옆면 하나
+;
+;   A = 회전량 (3 = 왼쪽, 1 = 오른쪽),  (segJ) = 구간 번호
+;
+; 옆칸 하나만 봐서는 그릴 그림이 정해지지 않는다. 광선이 그 자리를 지나
+; 평면 z = k 에서 만나는 것은 **옆으로 LatTab[j][k] 칸, 앞으로 k 칸**인 칸이다.
+; 그래서 k = j+1 부터 NSEG 까지 차례로 보고 처음 만나는 벽을 찾는다.
+;
+;   옆칸이 벽        -> 블록 0 (비스듬한 벽면)
+;   평면 k 에서 만남 -> 블록 k-j (그 평면의 정면)
+;   끝까지 없음      -> 마지막 블록 (바닥/천장만 이어진다)
+;
+; 한때 k = j+1 하나만 봤다. 그러면 광장이나 폭이 넓은 통로에서 저 멀리 이어진
+; 벽이 기둥 두 개로 끊겨 보인다 - 두 칸까지만 보고 그 너머를 어둠으로 둔 탓이다.
+;-----------------------------------------------------------------------------
+SideVis:
+    call SideFace               ; (faceF), (faceW), (bandId), (sdx), (sdy)
+
+    ld a, (cellX)               ; 옆칸이 벽인가 = 이 구간의 칸 + 옆으로 하나
+    ld hl, sdx
+    add a, (hl)
+    ld d, a
+    ld a, (cellY)
+    ld hl, sdy
+    add a, (hl)
+    ld e, a
+    call IsWall
+    ld a, 0                     ; 0 = 옆칸이 벽
+    jr nz, .sel
+
+    ; 뚫렸다. k = j+1 .. NSEG 를 차례로 본다.
+    ;
+    ; 평면마다 칸을 처음부터 다시 세지 않는다. k 를 하나 늘리면 앞으로 한 칸이고,
+    ; 옆으로 몇 칸인지는 LatTab 이 0 아니면 1 만큼만 늘기 때문이다. 매번 다시
+    ; 세던 판은 BuildVisibility 하나가 16ms 를 먹었다.
+    ld a, (segJ)
+    inc a
+    ld (scanK), a
+    call CellAhead              ; D,E = (j+1) 칸 앞
+    call LatM                   ; A = 그 평면에서 옆으로 몇 칸
+    ld (lastM), a
+    ld b, a
+.mstep:
+    ld a, d
+    ld hl, sdx
+    add a, (hl)
+    ld d, a
+    ld a, e
+    ld hl, sdy
+    add a, (hl)
+    ld e, a
+    djnz .mstep
+    ld a, d
+    ld (rayX), a
+    ld a, e
+    ld (rayY), a
+.scan:
+    ld a, (rayX)
+    ld d, a
+    ld a, (rayY)
+    ld e, a
+    call IsWall
+    ld a, (scanK)
+    jr nz, .sel                 ; 여기서 만났다
+    inc a
+    ld (scanK), a
+    cp NSEG + 1
+    jr nc, .none
+
+    ld hl, rayX                 ; 다음 평면 - 앞으로 한 칸
+    ld a, (fdx)
+    add a, (hl)
+    ld (hl), a
+    ld hl, rayY
+    ld a, (fdy)
+    add a, (hl)
+    ld (hl), a
+    call LatM                   ; 옆으로 한 칸 더 나가는 해인가
+    ld hl, lastM
+    ld c, a
+    sub (hl)
+    ld (hl), c
+    or a
+    jr z, .scan
+    ld hl, rayX
+    ld a, (sdx)
+    add a, (hl)
+    ld (hl), a
+    ld hl, rayY
+    ld a, (sdy)
+    add a, (hl)
+    ld (hl), a
+    jr .scan
+.none:
+    ld a, 0xFF                  ; 볼 수 있는 데까지 아무것도 없다
+.sel:
+    ld (selK), a
+
+    or a                        ; 띠 바깥은 벽이냐 뚫렸냐 둘뿐이다
+    ld a, VIS_WALL2
+    jr z, .outer
+    ld a, VIS_GAP2
+.outer:
+    push af
+    ld a, (faceF)
+    add a, OUTER0
+    ld c, a
+    pop af
+    call SetVis
+
+    ; 띠 안: K = j+1 .. NSEG
+    ;
+    ; 그릴 블록 번호는 index = min(cap, K-j+1) 이다. cap 은 옆칸이 벽이면 0,
+    ; 평면 s 에서 만나면 s-j, 끝까지 없으면 무한(0xFF)이다. K 가 하나 늘면
+    ; 한계가 하나 늘고 총 바이트가 폭만큼 는다. 그러니 곱셈은 첫 띠에서 한 번만
+    ; 하고, 그다음부터는 **앞이나 뒤 둘 중 하나에 폭을 더하기만** 하면 된다.
+    ; 띠마다 곱셈 두 번씩 하던 판은 BuildVisibility 하나가 15ms 를 먹었다.
+    ld a, (selK)
+    or a
+    jr z, .havecap              ; 옆칸이 벽 -> 0 번 블록
+    cp 0xFF
+    jr z, .havecap              ; 끝까지 없음 -> 언제나 마지막 블록
+    ld hl, segJ
+    sub (hl)                    ; cap = s - j
+.havecap:
+    ld (bandCap), a
+
+    ld a, 2                     ; 첫 띠(K = j+1)의 한계
+    ld (bandLim), a
+    ld a, (bandCap)
+    cp 2
+    jr c, .capsmall
+    ld a, 2
+.capsmall:
+    call MulW                   ; 앞에서 건너뛸 바이트 = min(cap,2) * 폭
+    ld (bandPre), a
+    ld c, a
+    ld a, (faceW)               ; 첫 띠의 총 바이트 = 2 * 폭
     add a, a
+    sub c
+    ld (bandPost), a
+
+    ld a, (segJ)
+    inc a
+    ld (bandK), a
+.band:
+    ld a, (bandPre)
+    add a, VIS_OFS
+    ld c, a
+    ld a, (bandId)
+    ld l, a
+    ld h, Vis >> 8
+    ld (hl), c
+    ld h, VisPost >> 8
+    ld a, (bandPost)
+    ld (hl), a
+
+    ld hl, bandK                ; 다음 띠로
+    inc (hl)
+    ld a, (hl)
+    cp NSEG + 1
+    ret nc
+    ld hl, bandId
+    inc (hl)
+    ld hl, bandLim
+    inc (hl)
+    ld a, (bandCap)             ; 한계가 늘어 index 가 따라 늘 수 있는가
+    cp (hl)
+    jr c, .growpost             ; cap < 한계 -> index 는 그대로, 뒤가 는다
+    ld hl, bandPre
+    jr .grow
+.growpost:
+    ld hl, bandPost
+.grow:
+    ld a, (faceW)
+    add a, (hl)
+    ld (hl), a
+    jr .band
+
+;-----------------------------------------------------------------------------
+; 가려진 구간의 옆면. A = 회전량. 블록을 전부 건너뛰게 해 둔다.
+;-----------------------------------------------------------------------------
+SideSkip:
+    push bc
+    call SideFace
+    ld a, (faceF)
+    add a, OUTER0
+    ld c, a
+    ld a, VIS_SKIP2
+    call SetVis
+
+    ld a, (segJ)                ; 첫 띠의 블록은 셋 - 총 3 * 폭 바이트다.
+    inc a                       ; 띠가 하나 깊어질 때마다 폭만큼 늘어난다.
+    ld (bandK), a
+    ld a, (faceW)
+    ld c, a
     add a, a
+    add a, c
+    ld (bandPost), a
+.band:
+    ld a, (bandId)
+    ld l, a
+    ld h, VisPost >> 8
+    ld a, (bandPost)
+    ld (hl), a
+    ld h, Vis >> 8
+    ld (hl), VIS_SKIPN
+
+    ld hl, bandK
+    inc (hl)
+    ld a, (hl)
+    cp NSEG + 1
+    jr nc, .done
+    ld hl, bandId
+    inc (hl)
+    ld hl, bandPost
+    ld a, (faceW)
+    add a, (hl)
+    ld (hl), a
+    jr .band
+.done:
+    pop bc
+    ret
+
+;-----------------------------------------------------------------------------
+; A = 회전량 -> (sideRot), (faceF), (faceW), (bandId), (sdx), (sdy) 를 채운다.
+; f = j*2 + 쪽 (왼쪽 0, 오른쪽 1).
+;-----------------------------------------------------------------------------
+SideFace:
+    ld (sideRot), a
+    ld hl, facing               ; 그쪽으로 한 칸 가는 델타를 미리 꺼내 둔다
+    add a, (hl)
+    and 3
+    add a, a
+    ld l, a
+    ld h, 0
+    ld de, DirTab
+    add hl, de
+    ld a, (hl)
+    ld (sdx), a
+    inc hl
+    ld a, (hl)
+    ld (sdy), a
+
+    ld a, (segJ)
+    add a, a
+    ld e, a
+    ld a, (sideRot)
+    cp 3
+    jr z, .left
+    inc e                       ; 오른쪽
+.left:
+    ld a, e
+    ld (faceF), a
+    ld d, 0
+    push de
+    ld hl, SideWidth
+    add hl, de
+    ld a, (hl)
+    ld (faceW), a
+    pop de
+    ld hl, SideBandBase
+    add hl, de
+    ld a, (hl)
+    ld (bandId), a
+    ret
+
+;-----------------------------------------------------------------------------
+; A = LatTab[(segJ)][(scanK)] - 그 평면에서 광선이 옆으로 몇 칸 나가 있는가.
+;
+; 화면에서 그 옆면을 채우는 광선은 평면 z=k 에서 옆으로 s*k 만큼 나가 있는데,
+; 그 값이 몇 번째 칸인지는 빌드할 때 quest_geom.py 가 정해 구워 둔다.
+;-----------------------------------------------------------------------------
+LatM:
+    push de                     ; 부르는 쪽이 칸을 D,E 에 들고 있다. 표 주소를
+    ld a, (segJ)                ; 짚는 데 DE 를 쓰므로 반드시 보존한다.
+    ld b, a                     ; 색인 = j*(NSEG+1) + k
+    add a, a
+    add a, b
+    add a, a                    ; j*6
+    ld c, a
+    ld a, (scanK)
+    add a, c
+    ld l, a
+    ld h, 0
+    ld de, LatTab
+    add hl, de
+    ld a, (hl)
+    pop de
+    ret
+
+; A = A * (faceW). A 는 6 이하, 폭은 9 이하라 결과가 한 바이트에 들어간다.
+MulW:
+    ld b, a
+    xor a
+    or b
+    ret z
+    ld a, (faceW)
+    ld c, a
+    xor a
+.mul:
+    add a, c
+    djnz .mul
     ret
 
 ; A = 상태, C = 면 번호. Vis[C] 에 넣는다. BC 보존.
@@ -975,9 +1298,19 @@ SetVis:
     pop hl
     ret
 
+; A = 값, C = 면 번호. VisPost[C] 에 넣는다. BC 보존.
+SetVisPost:
+    push hl
+    ld h, VisPost >> 8
+    ld l, c
+    ld (hl), a
+    pop hl
+    ret
+
 ;-----------------------------------------------------------------------------
-; 맵 - quest.asm 과 완전히 같다.
+; 맵
 ;-----------------------------------------------------------------------------
+; A = 거리 k(1 이상). 결과 D = 칸 x, E = 칸 y.
 CellAhead:
     push bc
     ld b, a
@@ -1004,57 +1337,6 @@ CellAhead:
     dec c
     jr nz, .ly
     ld e, a
-    pop bc
-    ret
-
-; A = 회전량, D,E = 기준 칸. 그쪽 이웃을 D,E 에 돌려준다. BC 보존.
-NeighbourCell:
-    push bc
-    ld b, d                     ; 기준 칸을 옮겨 두고 DE 로 표를 짚는다
-    ld c, e
-    ld hl, facing
-    add a, (hl)
-    and 3
-    add a, a
-    ld l, a
-    ld h, 0
-    ld de, DirTab
-    add hl, de
-    ld a, b
-    add a, (hl)
-    ld d, a
-    inc hl
-    ld a, c
-    add a, (hl)
-    ld e, a
-    pop bc
-    ret
-
-; A = 회전량 (1 = 오른쪽, 3 = 왼쪽) -> A = 그쪽 옆면의 상태. BC 보존.
-; quest.asm 의 SideVis 와 같다 - 옆칸과 대각선 앞칸을 함께 봐야 그림이 정해진다.
-SideVis:
-    push bc
-    ld c, a
-    ld a, (cellX)
-    ld d, a
-    ld a, (cellY)
-    ld e, a
-    ld a, c
-    call NeighbourCell
-    call IsWall
-    ld a, VIS_WALL3
-    jr nz, .done
-    ld a, (cellX2)
-    ld d, a
-    ld a, (cellY2)
-    ld e, a
-    ld a, c
-    call NeighbourCell
-    call IsWall
-    ld a, VIS_OPEN3
-    jr nz, .done
-    ld a, VIS_GAP3
-.done:
     pop bc
     ret
 

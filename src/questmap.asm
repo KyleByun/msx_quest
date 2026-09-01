@@ -2,9 +2,10 @@
 ; 오른쪽 양피지 위의 Diablo 식 미니맵
 ;
 ; MapDataRam의 한 칸을 6x6 픽셀로 확대한다. 16x16이라 96x96이 되고,
-; 메시지 창(102x104) 안에 맞는다. 벽은 회색, 통로는 검정, 현재 위치는
-; 패널색으로 표시한다. 한 맵 행을 48바이트만 RAM에 만들고 여섯 스캔라인에
-; 반복 전송하므로 4,608바이트짜리 별도 화면 버퍼는 필요 없다.
+; 메시지 창(102x104) 안에 맞는다. 벽은 회색, 통로는 검정이고, 내 자리에는
+; 바라보는 방향 화살표를 파란색으로 얹는다(DrawHero). 한 맵 행을 48바이트만
+; RAM에 만들고 여섯 스캔라인에 반복 전송하므로 4,608바이트짜리 별도 화면
+; 버퍼는 필요 없다.
 ;-----------------------------------------------------------------------------
 
 MINIMAP_X       equ 144          ; 셀 하나 3바이트(6픽셀) * 16 = 96x96
@@ -14,7 +15,6 @@ MINIMAP_ROW_BYTES equ MAP_W * 3  ; 한 맵 행의 바이트 수 (셀당 3)
 
 MINIMAP_WALL_BYTE  equ COL_SHADE * 17   ; 회색 두 픽셀
 MINIMAP_FLOOR_BYTE equ COL_BLACK * 17   ; 검정 두 픽셀
-MINIMAP_HERO_BYTE  equ COL_PANEL * 17   ; 현재 위치
 
 ; M 키가 새로 눌릴 때 지도 표시를 켜거나 끈다.
 ToggleMap:
@@ -47,23 +47,8 @@ DrawMap:
     ld a, (hl)
     inc hl
     or a
-    jr nz, .wall
-
-    ; 통로 위에 플레이어가 있으면 밝은 표시를 남긴다.
-    ld a, (posX)
-    cp c
-    jr nz, .floor
-    ld a, (posY)
-    ld b, a
-    ld a, (MiniMapY)
-    cp b
-    jr nz, .floor
-    ld a, MINIMAP_HERO_BYTE
-    jr .store
-.floor:
     ld a, MINIMAP_FLOOR_BYTE
-    jr .store
-.wall:
+    jr z, .store
     ld a, MINIMAP_WALL_BYTE
 .store:
     ld (de), a                  ; 6픽셀 = 같은 색 두 픽셀 3바이트
@@ -108,53 +93,61 @@ DrawMap:
     add a, MINIMAP_CELL
     ld (MiniMapScreenY), a
     djnz .maprow
-    jp DrawCompass
+    jp DrawHero
 
 ;-----------------------------------------------------------------------------
-; 나침반 - 미니맵 왼쪽 위 (맵 96x96 을 6x6 격자 위에 겹친다)
+; 내 위치 - 지도의 내 칸에 바라보는 방향 화살표를 얹는다
 ;
-;   W   N   E   를 3x3 다이아몬드로 놓고 바라보는 방향만 패널색, 나머지는
-;       S       어둡게. 글자 대신 6x6 픽셀 화살촉 모양을 쓴다.
+; 예전에는 지도 왼쪽 위에 나침반을 따로 그렸다. 자리도 잡아먹고, 방향을 알려면
+; 지도에서 눈을 떼야 했다. 내 칸에 바로 그리면 "어디에 있고 어디를 보는가"가
+; 한 번에 읽힌다.
 ;
-; 칸 배치 (맵 좌상단, MINIMAP_X/MINIMAP_Y 기준):
-;   (0,0)=W  (6,0)=N  (12,0)=E  (6,12)=S  - 각 6x6
-; 바라보는 방향의 화살촉이 맵 중심(동쪽=+x)을 향하도록 방향별 6x6 패턴 4종을
-; 둔다. 패턴은 4bpp 3바이트 x 6줄.
+; 그 나침반은 애초에 제대로 그려지지도 않았다. 방향별 패턴 주소가 2바이트씩
+; 늘어선 표인데 facing*4 로 짚고 있어서, 북쪽만 맞고 동쪽은 남쪽 모양이 나오고
+; 남/서는 표 밖을 읽어 엉뚱한 VRAM 자리에 낙서를 했다. 화면 구석의 작은 그림이라
+; 오래 눈치채지 못했다.
+;
+; 화살표 모양은 gfx/quest_convert.py 가 북쪽 하나만 적고 나머지 셋을 돌려서
+; 만든다. 색은 COL_HERO(파랑) - 지도가 회색과 검정뿐이라 눈에 바로 띈다.
 ;-----------------------------------------------------------------------------
-
-COMPASS_X   equ MINIMAP_X
-COMPASS_Y   equ MINIMAP_Y
-
-DrawCompass:
-    ld a, (facing)
+DrawHero:
+    ld a, (facing)              ; 표 항목이 주소 2바이트씩이다
     add a, a
-    add a, a                    ; facing * 4 (패턴 하나가 4바이트씩 6줄)
     ld e, a
     ld d, 0
-    ld hl, CompassPat
+    ld hl, HeroArrowPtr
     add hl, de
     ld a, (hl)
     inc hl
     ld h, (hl)
-    ld l, a                     ; HL = 그 방향의 패턴 주소
+    ld l, a                     ; HL = 그 방향의 패턴
 
-    ld a, (hl)                  ; 패턴 첫 바이트 = 그 방향 칸의 오프셋 (dx, dy)
-    ld c, a                     ; dx*16 + dy 를 미리 구워 둔 값
-    inc hl
+    ld a, (posX)                ; 바이트 x = (MINIMAP_X + posX*6) / 2
+    ld b, a
+    add a, a
+    add a, b                    ; posX * 3
+    add a, MINIMAP_X / 2
+    ld (HeroXb), a
 
-    ld a, COMPASS_Y
-    add a, c                    ; 세로 오프셋
+    ld a, (posY)                ; 화면 y = MINIMAP_Y + posY*6
+    ld b, a
+    add a, a
+    add a, b
+    add a, a                    ; posY * 6
+    add a, MINIMAP_Y
     ld d, a
-    ld b, 6                     ; 6줄
+
+    ld b, MINIMAP_CELL
 .line:
     push bc
     push hl
+    ld a, (HeroXb)
+    ld e, a
     ld a, d
-    ld e, COMPASS_X / 2
     call RowAddrB
     call SetVramWrite
     pop hl
-    ld b, 3
+    ld b, MINIMAP_CELL / 2      ; 6 픽셀 = 3 바이트
     ld c, VDP_DATA
 .wr:
     outi
@@ -164,48 +157,3 @@ DrawCompass:
     inc d
     djnz .line
     ret
-
-; 방향별 패턴 테이블. 각 항목: dw 패턴주소, db 위치코드, 18바이트 픽셀.
-; 위치코드 = (칸dy * 16) + 칸dx. 칸은 6픽셀이므로 dx/dy 는 0, 6, 12.
-; facing 0=북 1=동 2=남 3=서 (DirTab 과 같은 순서)
-CompassPat:
-    dw CompassN, CompassE, CompassS, CompassW
-
-; 북쪽을 볼 때: N 칸(위, dx=6,dy=0)이 밝고 W(0,0) E(12,0) S(6,12)은 어둡다.
-; 밝은 칸 = 패널색 두 픽셀, 어두운 칸 = 어두운 회색 두 픽셀.
-; 화살촉은 위쪽(북)을 향하는 삼각형.
-CompassN:
-    db 6 * 16 + 0               ; N 칸 위치 (dx=6, dy=0)
-    db 0x44, 0x40, 0x00         ; 줄1 - 중앙만 밝게
-    db 0x44, 0x40, 0x00
-    db 0x34, 0x43, 0x00         ; 줄3 - 조금 넓게
-    db 0x23, 0x33, 0x00
-    db 0x12, 0x22, 0x10
-    db 0x00, 0x11, 0x10         ; 줄6 - 바닥
-
-CompassE:
-    db 12 * 16 + 0              ; E 칸 위치 (dx=12, dy=0)
-    db 0x44, 0x40, 0x00
-    db 0x44, 0x44, 0x00
-    db 0x44, 0x44, 0x30
-    db 0x44, 0x44, 0x30
-    db 0x44, 0x44, 0x00
-    db 0x44, 0x40, 0x00
-
-CompassS:
-    db 6 * 16 + 12              ; S 칸 위치 (dx=6, dy=12)
-    db 0x00, 0x11, 0x10
-    db 0x12, 0x22, 0x10
-    db 0x23, 0x33, 0x00
-    db 0x34, 0x43, 0x00
-    db 0x44, 0x40, 0x00
-    db 0x44, 0x40, 0x00
-
-CompassW:
-    db 0 * 16 + 0               ; W 칸 위치 (dx=0, dy=0)
-    db 0x00, 0x04, 0x44
-    db 0x00, 0x44, 0x44
-    db 0x03, 0x44, 0x44
-    db 0x03, 0x44, 0x44
-    db 0x00, 0x44, 0x44
-    db 0x00, 0x04, 0x44

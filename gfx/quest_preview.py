@@ -25,10 +25,11 @@ def is_wall(mx, my):
 
 
 def visibility(px, py, facing):
-    """BuildVisibility 와 같은 규칙으로 면 상태를 정한다."""
+    """BuildVisibility 와 같은 규칙으로 면마다 '무엇이 보이는가'를 정한다.
+
+    옆면의 값: "wall" = 옆칸이 벽, 정수 k = 평면 z=k 에서 벽을 만남, None = 없음.
+    """
     fx, fy = DIRS[facing]
-    lx, ly = DIRS[(facing + 3) & 3]
-    rx, ry = DIRS[(facing + 1) & 3]
 
     block = G.MAXD + 1
     for k in range(1, G.MAXD + 1):
@@ -36,25 +37,27 @@ def visibility(px, py, facing):
             block = k
             break
 
-    def side(cx, cy, dx, dy):
-        """옆칸과 대각선 앞칸을 함께 본다 - 둘을 다 봐야 그림이 정해진다."""
+    def side(j, rot):
+        """옆칸부터 평면 z=NSEG 까지 차례로 보고 처음 만나는 벽을 찾는다."""
+        dx, dy = DIRS[(facing + rot) & 3]
+        cx, cy = px + fx * j, py + fy * j
         if is_wall(cx + dx, cy + dy):
-            return "wall"                       # 비스듬한 벽면
-        if is_wall(cx + fx + dx, cy + fy + dy):
-            return "face"                       # 대각선 앞칸의 정면
-        return "gap"                            # 바닥/천장만 이어진다
+            return "wall"
+        for k in range(j + 1, G.NSEG + 1):
+            m = G.LATERAL[j][k]                 # 그 평면에서 광선이 지나는 칸
+            if is_wall(px + fx * k + dx * m, py + fy * k + dy * m):
+                return k
+        return None
 
     vis = {C.CENTRE_ID: "skip" if block <= G.MAXD else "black"}
     for j in range(G.NSEG):
-        base = j * 4
         if j >= block:                          # 정면 벽이 덮는다
-            vis[base + 0] = vis[base + 1] = "skip"
-            vis[base + 2] = vis[base + 3] = "skip"
+            vis[j * 2] = vis[j * 2 + 1] = "skip"
+            vis[(j * 2, 0)] = vis[(j * 2, 1)] = "skip"
             continue
-        cx, cy = px + fx * j, py + fy * j
-        vis[base + 0] = vis[base + 1] = "tex"   # 천장, 바닥
-        vis[base + 2] = side(cx, cy, lx, ly)
-        vis[base + 3] = side(cx, cy, rx, ry)
+        vis[j * 2] = vis[j * 2 + 1] = "tex"     # 천장, 바닥
+        vis[(j * 2, 0)] = side(j, 3)            # 왼쪽
+        vis[(j * 2, 1)] = side(j, 1)            # 오른쪽
     return vis, block
 
 
@@ -64,20 +67,23 @@ def render(px, py, facing):
     vis, block = visibility(px, py, facing)
 
     for yy in range(G.VIEW_H):                  # 1단계: 통로
+        K = C.kmax_at(G.VIEW_Y + yy)            # 이 줄에서 벽면이 보일 수 있는 깊이
         for xx in range(G.VIEW_W):
-            st = vis[IDM[yy][xx]]
-            if st == "skip":
-                continue                        # 2단계에서 정면 벽이 덮는다
-            if st == "black":
-                continue
-            if st == "face":                    # 삼중 블록의 1 번
-                j = IDM[yy][xx] // 4
-                d[xx, yy] = T.bake_side_face(j, G.VIEW_X + xx, G.VIEW_Y + yy)
-            elif st == "gap":                   # 삼중 블록의 2 번
-                j = IDM[yy][xx] // 4
-                d[xx, yy] = T.bake_side_open(j, G.VIEW_X + xx, G.VIEW_Y + yy)
-            else:                               # 단일 블록 또는 삼중 블록의 0 번
-                d[xx, yy] = RGB[yy][xx]
+            sid = IDM[yy][xx]
+            if C.geom_is_side(sid):
+                j = sid // 4
+                st = vis[(j * 2, sid % 4 - 2)]
+            else:
+                st = vis[C.CENTRE_ID if sid == C.GEOM_CENTRE
+                         else (sid // 4) * 2 + (sid % 4)]
+            if st in ("skip", "black"):
+                continue                        # 2단계의 정면 벽 또는 어둠
+            if st == "wall" or st == "tex":
+                d[xx, yy] = RGB[yy][xx]         # 그 면의 그림 그대로
+            elif st is not None and st <= K:    # 평면 z=st 의 정면
+                d[xx, yy] = T.bake_front(st, G.VIEW_X + xx, G.VIEW_Y + yy)
+            else:                               # 이 줄에서는 안 보인다
+                d[xx, yy] = T.bake_side_open(0, G.VIEW_X + xx, G.VIEW_Y + yy)
 
     if block <= G.MAXD:                         # 2단계: 정면 벽
         l, t, r, b = G.RECT[block]

@@ -149,19 +149,18 @@ def db_sbytes(vals):
     return "    db " + ", ".join(str(v & 0xFF) for v in vals)
 
 
-# 팔레트는 quest_convert.py 에서 고정한 것과 같아야 한다. 그림을 16 색으로 줄일
-# 때 쓴다.
-PAL333 = [(7,7,6),(7,7,5),(7,6,5),(6,6,5),(5,5,5),(5,5,3),(4,4,4),(3,3,3),
-          (2,2,2),(0,0,0),(1,1,1),(6,6,6),(7,7,7),(7,6,4),(5,4,5),(5,5,2)]
+# 팔레트는 gfx/quest_pal.py 가 정본이다. 예전에는 여기에 같은 값을 다시 적어
+# 두고 "quest_convert.py 와 같아야 한다"는 주석만 달았는데, 한쪽만 고치면 조용히
+# 어긋난다.
+from quest_pal import PAL333
 
 
 def to888(c):
     return tuple(round(v * 255 / 7) for v in c)
 
 
-def nearest_idx(pal, c):
-    return min(range(len(pal)),
-               key=lambda i: sum((a - b) ** 2 for a, b in zip(to888(pal[i]), c)))
+# 양자화 규칙은 quest_pal 이 정본이다 - UI 전용 자리(파랑)를 후보에서 뺀다.
+from quest_pal import nearest as nearest_idx
 
 
 SPR_HDR = """; 이 파일은 gfx/quest_rules.py 가 만든다. 직접 고치지 말 것.

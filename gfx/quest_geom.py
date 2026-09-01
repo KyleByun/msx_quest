@@ -86,6 +86,31 @@ def front_rect(d):
     return [(y, l, r) for y in range(t, b + 1)]
 
 
+# --- 옆면을 지나간 광선이 평면 z=k 에서 어느 칸에 있는가 -------------------
+#
+# 구간 j 의 옆면을 채우는 광선은 화면 중심에서 dx = HALF[j+1] .. HALF[j] 만큼
+# 떨어져 있고 기울기가 s = dx/P 다. 평면 z=k 에서의 옆방향 위치는 s*k 이므로
+# 그 범위는 [HALF[j+1]*k/P, HALF[j]*k/P] 다. 칸 m 이 [m-0.5, m+0.5] 를 차지하니
+# 가운데 값을 반올림하면 그 평면에서 볼 칸이 나온다.
+#
+# 손으로 적지 않고 여기서 뽑는 이유는, 범위가 칸 경계에 걸치는 자리가 있어서다
+# (j=0,k=3 은 정확히 1.5 에서 시작하고 j=1,k=4 는 1.0~2.0 으로 두 칸에 걸친다).
+# 한 면 안에서도 픽셀마다 답이 다른데 면 하나에 칸 하나를 고르는 근사다.
+P = 72.0
+
+
+def lateral_at(j, k):
+    """구간 j 의 옆면 광선이 평면 z=k 에서 지나는 칸 (옆으로 몇 칸)."""
+    near = HALF[j + 1] * k / P
+    far = HALF[j] * k / P
+    return max(1, int(round((near + far) / 2.0)))
+
+
+# LATERAL[j][k] - k 는 j+1 부터 NSEG 까지만 뜻이 있다
+LATERAL = [[lateral_at(j, k) if j < k <= NSEG else 0 for k in range(NSEG + 1)]
+           for j in range(NSEG)]
+
+
 if __name__ == "__main__":
     print("뷰포트 (%d,%d) %dx%d  소실점 (%d,%d)" % (VIEW_X, VIEW_Y, VIEW_W, VIEW_H, CX, CY))
     print("구간 %d 개 (0 = 내가 선 칸), 앞으로 %d 칸까지 보인다" % (NSEG, MAXD))

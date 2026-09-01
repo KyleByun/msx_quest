@@ -14,6 +14,7 @@ from PIL import Image
 import os
 import quest_geom as G
 import quest_tex as T
+from quest_pal import PAL333, COL_HERO, nearest as _nearest
 from quest_map import MAP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -23,34 +24,78 @@ ROOT = os.path.dirname(HERE)
 # 넣어 두었다. 256x212 이고 팔레트에 있는 색만 쓴다.
 SRC = os.path.join(HERE, "quest_bg.png")
 
-CENTRE_ID = G.NSEG * 4
-NUM_IDS = CENTRE_ID + 1
+# 굽기용 면 번호(build_maps 안에서만 쓴다): j*4 + {0=천장,1=바닥,2=좌,3=우}
+GEOM_CENTRE = G.NSEG * 4
 
-# 면 상태 (실행 중에 정해진다)
+
+def geom_is_side(sid):
+    return sid != GEOM_CENTRE and (sid % 4) >= 2
+
+
+# --------------------------------------------------------------------------
+# 런에 붙는 면 번호
+# --------------------------------------------------------------------------
+# 옆면은 광선이 그 자리를 지나 **어느 평면에서 벽을 만나는가**에 따라 그림이
+# 달라진다. 만날 수 있는 평면은 z = j+1 부터 z = NSEG 까지다. 그래서 옆면 런은
+# 블록을 이렇게 갖는다.
 #
-# 좌우 벽은 픽셀 블록을 세 개 갖는다. 옆칸 하나만 보고는 그 자리에 무엇이
-# 보이는지 정할 수 없기 때문이다(quest_tex.py 의 bake_side_* 참고).
+#   블록 0        옆칸이 벽             -> 비스듬한 벽면
+#   블록 1..K-j   평면 k 에서 만남      -> bake_front(k)   (k = j+1..K)
+#   마지막 블록   끝까지 안 만남        -> 바닥/천장만 이어진다
 #
-#   블록 0  옆칸이 벽                        -> 비스듬한 벽면
-#   블록 1  옆칸은 뚫림, 대각선 앞칸이 벽    -> 그 칸의 정면
-#   블록 2  둘 다 뚫림                       -> 바닥/천장만 이어진다
+# 여기서 K 는 **그 스캔라인에서 벽면이 보일 수 있는 가장 깊은 평면**이다. 평면
+# z=k 의 벽은 화면에서 |dy| < HALF[k] 안에만 보이므로, 소실선에서 멀어질수록 K 가
+# 작아지고 블록도 줄어든다. |dy| >= HALF[j+1] 인 줄은 블록이 둘뿐이다.
 #
-# 천장/바닥/한가운데는 실행 중에 갈릴 것이 없으므로 블록이 하나다.
+# 런은 이미 스캔라인 단위이고 이 띠 경계는 가로선이므로, **런을 쪼갤 필요 없이
+# 면 번호만 띠마다 다르게 주면 된다.** 그러면 블록 수가 면 번호로 정해져서
+# 렌더러가 실행 중에 셀 것이 없다.
 #
-# 번호는 분기 순서다. VIS_TEX 가 0 이라야 or a / jr z 한 번으로 걸러진다(가장
-# 흔하다). 그다음이 VIS_WALL3 인데, 옆칸은 대개 벽이기 때문이다.
+#   0 .. 2N-1     구간 j 의 천장(j*2), 바닥(j*2+1)      단일 블록
+#   2N            한가운데                              단일 블록
+#   2N+1 .. 2N+10 좌우 벽의 '띠 바깥' (f = j*2+side)    블록 2 개
+#   그 뒤         좌우 벽의 '띠 안' (f, K)              블록 2 + (K-j) 개
+#
+# f 마다 띠 안 번호가 K = j+1..NSEG 순으로 이어져 있어서, 어셈블리 쪽에서 시작
+# 번호 하나와 K 를 세는 것만으로 전부 짚을 수 있다.
+NFACE = G.NSEG * 2                              # 좌우 벽 면의 개수
+CENTRE_ID = G.NSEG * 2
+OUTER0 = CENTRE_ID + 1                          # 띠 바깥 번호의 시작
+BAND0 = OUTER0 + NFACE                          # 띠 안 번호의 시작
+
+BAND_BASE = []
+_acc = 0
+for _f in range(NFACE):
+    BAND_BASE.append(_acc)
+    _acc += G.NSEG - (_f // 2)                  # K = j+1..NSEG
+NUM_IDS = BAND0 + _acc
+
+
+def band_id(f, K):
+    j = f // 2
+    return BAND0 + BAND_BASE[f] + (K - j - 1)
+
+
+def kmax_at(y):
+    """스캔라인 y(화면 좌표)에서 벽면이 보일 수 있는 가장 깊은 평면."""
+    dy = abs(y - G.CY)
+    best = 0
+    for k in range(1, G.NSEG + 1):
+        if G.HALF[k] > dy:
+            best = k
+    return best
+
+
+# 면 상태 (실행 중에 정해진다). 번호가 곧 분기 순서다.
 VIS_TEX = 0         # 단일 블록, 그리기 (가장 흔하므로 0 - 분기가 제일 짧다)
-VIS_WALL3 = 1       # 삼중 블록, 0 번(벽면) 그리기
-VIS_OPEN3 = 2       # 삼중 블록, 1 번(대각선 앞칸의 정면) 그리기
-VIS_GAP3 = 3        # 삼중 블록, 2 번(뚫린 채 이어지는 바닥/천장) 그리기
-VIS_BLACK = 4       # 단일 블록, 검정으로 채우기 (통로 끝의 어둠)
-VIS_SKIP = 5        # 단일 블록, 건너뛰기 (정면 벽에 가려짐)
-VIS_SKIP3 = 6       # 삼중 블록, 셋 다 건너뛰기
-
-
-def is_side(sid):
-    """좌벽(2) 과 우벽(3) 만 블록을 세 개 갖는다."""
-    return sid != CENTRE_ID and (sid % 4) >= 2
+VIS_SKIP = 1        # 단일 블록, 건너뛰기 (정면 벽에 가려짐)
+VIS_BLACK = 2       # 단일 블록, 검정으로 채우기 (통로 끝의 어둠)
+VIS_WALL2 = 3       # 두 블록, 앞을 그리고 뒤를 건너뛴다 (띠 바깥, 옆칸이 벽)
+VIS_GAP2 = 4        # 두 블록, 앞을 건너뛰고 뒤를 그린다 (띠 바깥, 뚫림)
+VIS_SKIP2 = 5       # 두 블록, 둘 다 건너뛴다
+VIS_SKIPN = 6       # n 블록, 전부 건너뛴다 (총 바이트 수는 VisPost 에)
+VIS_OFS = 7         # 이 값부터: (값 - VIS_OFS) 바이트를 건너뛰고 그린다.
+                    # 그린 뒤 남은 바이트 수는 VisPost 에 있다.
 
 
 def to888(c):
@@ -61,14 +106,9 @@ def snap333(c):
     return tuple(round(v * 7 / 255) for v in c)
 
 
-def nearest(pal, c):
-    best, bi = None, 0
-    for i, p in enumerate(pal):
-        pp = to888(p)
-        d = sum((pp[k] - c[k]) ** 2 for k in range(3))
-        if best is None or d < best:
-            best, bi = d, i
-    return bi
+# 양자화는 quest_pal 이 맡는다. UI 전용 자리(파랑)를 후보에서 빼야 하는데,
+# 같은 규칙을 두 군데 적어 두면 한쪽만 틀어진다.
+nearest = _nearest
 
 
 def rle(data):
@@ -115,7 +155,7 @@ def db(name, data, per=16):
 def build_maps():
     """뷰포트의 각 픽셀이 어느 면인지, 그리고 그 픽셀의 색(RGB)을 굽는다."""
     W, H = G.VIEW_W, G.VIEW_H
-    idm = [[CENTRE_ID] * W for _ in range(H)]
+    idm = [[GEOM_CENTRE] * W for _ in range(H)]
     rgb = [[(0, 0, 0)] * W for _ in range(H)]
 
     def stamp(spans, sid, baker, j):
@@ -142,10 +182,15 @@ def build_runs(idm, rgb, pal):
     """줄마다 (면번호, 바이트폭, 픽셀들) 런으로. 폭 0 이 줄의 끝.
 
     픽셀을 런 바로 뒤에 붙여 두면 포인터 하나로 순차 처리할 수 있다. 건너뛸
-    면이라도 폭만큼 포인터를 밀면 되므로 별도 색인이 필요 없다.
+    블록이라도 폭만큼 포인터를 밀면 되므로 별도 색인이 필요 없다.
+
+    옆면 런은 블록이 여러 개다(위의 면 번호 설명 참고). 몇 개인지는 면 번호로
+    정해지므로 렌더러가 셀 것이 없다 - 다만 그 약속이 깨지면 포인터가 통째로
+    어긋나므로 여기서 면 번호마다 블록 수와 폭이 하나뿐인지 확인한다.
     """
     W, H = G.VIEW_W, G.VIEW_H
     data, maxruns = [], 0
+    nblk_of, width_of = {}, {}
     for y in range(H):
         row = idm[y]
         runs, cur, n = [], row[0], 0
@@ -158,25 +203,83 @@ def build_runs(idm, rgb, pal):
                 cur, n = sid, 1
         runs.append((cur, n))
         maxruns = max(maxruns, len(runs))
+        K = kmax_at(G.VIEW_Y + y)
         xb = 0
         for sid, n in runs:
-            data += [sid, n]
-            for i in range(n):                      # 블록 0: 벽면 그대로
+            if sid == GEOM_CENTRE:
+                fid, bakers = CENTRE_ID, []
+            elif not geom_is_side(sid):
+                fid, bakers = (sid // 4) * 2 + (sid % 4), []
+            else:
+                j, f = sid // 4, (sid // 4) * 2 + (sid % 4 - 2)
+                if K <= j:                          # 띠 바깥 - 벽 아니면 뚫림뿐
+                    fid = OUTER0 + f
+                    bakers = [T.bake_side_open]
+                else:
+                    fid = band_id(f, K)
+                    bakers = [(lambda k: lambda jj, x, yy: T.bake_front(k, x, yy))(k)
+                              for k in range(j + 1, K + 1)] + [T.bake_side_open]
+                    width_of.setdefault(fid, n)
+                    assert width_of[fid] == n, (fid, width_of[fid], n)
+            nblk = 1 + len(bakers)
+            nblk_of.setdefault(fid, nblk)
+            assert nblk_of[fid] == nblk, (fid, nblk_of[fid], nblk)
+
+            data += [fid, n]
+            for i in range(n):                      # 블록 0: 그 면의 그림 그대로
                 x = (xb + i) * 2
                 hi = nearest(pal, rgb[y][x])
                 lo = nearest(pal, rgb[y][x + 1])
                 data.append((hi << 4) | lo)
-            if is_side(sid):
-                j = sid // 4
-                for baker in (T.bake_side_face, T.bake_side_open):   # 블록 1, 2
-                    for i in range(n):
-                        x = (xb + i) * 2
-                        hi = nearest(pal, baker(j, G.VIEW_X + x, G.VIEW_Y + y))
-                        lo = nearest(pal, baker(j, G.VIEW_X + x + 1, G.VIEW_Y + y))
-                        data.append((hi << 4) | lo)
+            for baker in bakers:
+                for i in range(n):
+                    x = (xb + i) * 2
+                    hi = nearest(pal, baker(sid // 4, G.VIEW_X + x, G.VIEW_Y + y))
+                    lo = nearest(pal, baker(sid // 4, G.VIEW_X + x + 1, G.VIEW_Y + y))
+                    data.append((hi << 4) | lo)
             xb += n
         data += [0, 0]
-    return data, maxruns
+    return data, maxruns, nblk_of, width_of
+
+
+# --------------------------------------------------------------------------
+# 미니맵의 내 위치 - 바라보는 방향 화살표
+# --------------------------------------------------------------------------
+# 지도 한 칸이 6x6 픽셀이다. 그 칸에 바로 화살표를 그리면 위치와 방향이 한 번에
+# 읽힌다(지도 구석에 나침반을 따로 두면 눈을 두 군데로 옮겨야 한다).
+#
+# 북쪽 모양 하나만 적고 나머지는 돌려서 만든다. 손으로 네 벌을 적으면 한 벌만
+# 틀려도 모르고 지나간다 - 실제로 예전 나침반 표가 그렇게 틀어져 있었다.
+# 6x6 는 화살표를 그리기에 아주 좁다. 대여섯 가지를 실제 크기로 그려 놓고 보니,
+# 꼬리를 V 로 판 화살촉이 방향이 제일 잘 읽혔다. 막대(줄기)를 붙이면 십자로
+# 보이고, 그냥 삼각형이면 덩어리로 보인다.
+ARROW_N = ["..XX..",
+           ".XXXX.",
+           "XXXXXX",
+           "XXXXXX",
+           "XX..XX",
+           "X....X"]
+
+
+def rot90(rows):
+    n = len(rows)
+    return ["".join(rows[n - 1 - x][y] for x in range(n)) for y in range(n)]
+
+
+def arrow_patterns(pal):
+    """방향(북동남서)별 6x6 패턴. 한 줄이 3바이트(픽셀 두 개가 한 바이트)."""
+    black = pal.index((0, 0, 0))
+    out, rows = [], ARROW_N
+    for _ in range(4):                       # 북 -> 동 -> 남 -> 서
+        blob = []
+        for r in rows:
+            for xb in range(0, 6, 2):
+                hi = COL_HERO if r[xb] == 'X' else black
+                lo = COL_HERO if r[xb + 1] == 'X' else black
+                blob.append((hi << 4) | lo)
+        out.append(blob)
+        rows = rot90(rows)
+    return out
 
 
 def build_front(pal):
@@ -226,17 +329,7 @@ def main():
     pix += dpix * 2
     pool = Image.new("RGB", (len(pix), 1))
     pool.putdata(pix)
-    # 팔레트는 고정한다.
-    #
-    # 예전에는 여기서 중앙값 분할로 매번 다시 뽑았다. 그런데 배경 정본이 이미
-    # 16색으로 정해진 그림이 되었으므로 그것을 다시 양자화하는 것은 자기를 근거로
-    # 자기를 정하는 셈이다. 게다가 팔레트가 한 칸이라도 움직이면 배경 RLE 와 벽면
-    # 픽셀이 전부 달라져 앞뒤 비교가 불가능해진다.
-    #
-    # 아래 값은 그때 뽑힌 결과 그대로다. 회색 여덟 단계가 다 들어 있어서 벽돌의
-    # 명암과 옆길의 어둠을 표현하는 데 부족하지 않다.
-    pal = [(7,7,6), (7,7,5), (7,6,5), (6,6,5), (5,5,5), (5,5,3), (4,4,4), (3,3,3),
-           (2,2,2), (0,0,0), (1,1,1), (6,6,6), (7,7,7), (7,6,4), (5,4,5), (5,5,2)]
+    pal = PAL333                            # gfx/quest_pal.py 가 정본이다
     _ = pix                                 # 표본은 이제 쓰지 않는다
     print("팔레트 16색 (RGB333):", " ".join("%d%d%d" % c for c in pal))
     BLACK = pal.index((0, 0, 0))
@@ -254,8 +347,19 @@ def main():
     print("배경: 원본 %d -> RLE %d 바이트" % (len(packed), len(comp)))
 
     # ---- 런 + 구운 픽셀 ----
-    runs, maxruns = build_runs(idm, rgb, pal)
-    print("벽면 런+픽셀: %d 바이트 (한 줄 최대 %d 런)" % (len(runs), maxruns))
+    runs, maxruns, nblk_of, width_of = build_runs(idm, rgb, pal)
+    assert len(width_of) == NFACE * 0 + len(set(width_of)), width_of
+    print("벽면 런+픽셀: %d 바이트 (한 줄 최대 %d 런, 면 번호 %d 개)"
+          % (len(runs), maxruns, NUM_IDS))
+    # 면마다 띠 안 폭이 하나로 정해져야 한다. 그래야 "블록 n 개만큼 건너뛰기"가
+    # 곱셈 없이 상수 오프셋이 되고, 렌더러가 세는 일 없이 더하기 한 번으로 끝난다.
+    sw = []
+    for f in range(NFACE):
+        ids = [band_id(f, K) for K in range(f // 2 + 1, G.NSEG + 1)]
+        ws = {width_of[i] for i in ids if i in width_of}
+        assert len(ws) == 1, (f, ws)
+        sw.append(ws.pop())
+    print("면별 띠 안 폭:", sw)
 
     fronts = build_front(pal)
     ftotal = sum(len(b) for b in fronts)
@@ -276,20 +380,24 @@ def main():
         "NSEG         equ %d" % G.NSEG,
         "CENTRE_ID    equ %d" % CENTRE_ID,
         "NUM_IDS      equ %d" % NUM_IDS,
+        "OUTER0       equ %d              ; 옆면 '띠 바깥' 번호의 시작" % OUTER0,
+        "BAND0        equ %d              ; 옆면 '띠 안' 번호의 시작" % BAND0,
         "",
         "; 면 상태",
         "VIS_TEX      equ %d" % VIS_TEX,
-        "VIS_WALL3    equ %d" % VIS_WALL3,
-        "VIS_OPEN3    equ %d" % VIS_OPEN3,
-        "VIS_GAP3     equ %d" % VIS_GAP3,
-        "VIS_BLACK    equ %d" % VIS_BLACK,
         "VIS_SKIP     equ %d" % VIS_SKIP,
-        "VIS_SKIP3    equ %d" % VIS_SKIP3,
+        "VIS_BLACK    equ %d" % VIS_BLACK,
+        "VIS_WALL2    equ %d" % VIS_WALL2,
+        "VIS_GAP2     equ %d" % VIS_GAP2,
+        "VIS_SKIP2    equ %d" % VIS_SKIP2,
+        "VIS_SKIPN    equ %d" % VIS_SKIPN,
+        "VIS_OFS      equ %d" % VIS_OFS,
         "",
         "COL_BLACK    equ %d" % BLACK,
         "COL_PANEL    equ %d" % nearest(pal, (182, 182, 182)),
         "COL_CREAM    equ %d" % nearest(pal, (255, 255, 219)),
         "COL_SHADE    equ %d" % nearest(pal, (146, 146, 146)),
+        "COL_HERO     equ %d              ; 미니맵의 내 위치 (파랑)" % COL_HERO,
         "BG_RLE_LEN   equ %d" % len(comp),
     ]
     open(os.path.join(ROOT, "src", "questconst.asm"), "w", encoding="utf-8").write(
@@ -301,6 +409,25 @@ def main():
     parts.append("; 스캔라인 런: 줄마다 (면번호, 바이트폭, 픽셀들) 이 이어지고")
     parts.append("; 폭 0 이면 줄 끝. 뷰포트 위에서 아래로 %d 줄이 연속으로 들어 있다." % G.VIEW_H)
     parts.append(db("RunData", runs))
+    parts.append("")
+    parts.append("; 미니맵의 내 위치 화살표. 방향(북동남서)별 6x6, 한 줄 3바이트.")
+    arrows = arrow_patterns(pal)
+    parts.append("HeroArrowPtr:")
+    for i, name in enumerate(("N", "E", "S", "W")):
+        parts.append("    dw HeroArrow%s" % name)
+    for name, blob in zip(("N", "E", "S", "W"), arrows):
+        parts.append(db("HeroArrow%s" % name, blob, per=3))
+    parts.append("")
+    parts.append("; 옆면 표. f = j*2 + 쪽(0=왼쪽, 1=오른쪽), f = 0..%d" % (NFACE - 1))
+    parts.append("; BuildVisibility 가 이것만으로 그 면의 띠 번호를 전부 짚는다.")
+    parts.append(db("SideBandBase", [band_id(f, f // 2 + 1) for f in range(NFACE)], per=10))
+    parts.append(db("SideBandCnt", [G.NSEG - f // 2 for f in range(NFACE)], per=10))
+    parts.append(db("SideWidth", sw, per=10))
+    parts.append("")
+    parts.append("; 구간 j 의 옆면 광선이 평면 z=k 에서 지나는 칸. 색인 j*%d+k."
+                 % (G.NSEG + 1))
+    parts.append(db("LatTab", [G.LATERAL[j][k] for j in range(G.NSEG)
+                               for k in range(G.NSEG + 1)], per=G.NSEG + 1))
     parts.append("")
     parts.append("; 정면 벽: 깊이 1..%d 각각 startY, 높이, xByte, 바이트폭, 픽셀" % G.MAXD)
     parts.append("FrontPtrs:")
