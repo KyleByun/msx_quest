@@ -81,6 +81,9 @@ CASES = {
     # 막다른 곳 - 정면 벽이 화면의 절반을 차지한다. 정면 벽의 위/아래 변이
     # 천장·바닥과 만나는 자리에 흰 줄이 생기던 화면이다(2단계 정면 벽 경로).
     "dead":   (grid_of(rect(7, 7, 4, 9)), 7, 5, 0),
+    # 코앞이 벽 - 정면 벽이 73x73 = 뷰포트의 57.8% 로 제일 크다. 정면 벽을
+    # VDP 명령(HMMM)으로 넘긴 뒤로는 이 화면이 그 경로를 제일 크게 밟는다.
+    "near":   (grid_of(rect(7, 7, 4, 9)), 7, 4, 0),
 }
 
 
@@ -190,19 +193,25 @@ def emulate(runs, fronts, vis, post):
     return scr
 
 
-def draw_front(scr, fronts, block):
+def draw_front(scr, front, block):
+    """정면 벽은 이제 VDP 가 VRAM 안에서 오려 붙인다(HMMM). 여기서는 그 명령이
+    하는 일을 그대로 따라 한다 - 명령 블록의 DX, DY, NX, NY 를 그대로 읽는다.
+    픽셀은 깊이 순서로 쌓여 있으므로 앞선 깊이들의 크기를 더해 시작점을 찾는다."""
     if block > G.MAXD:
         return
-    blob = fronts[block - 1]
-    t, h, xbyte, wb = blob[:4]
-    k = 4
-    for yy in range(t, t + h):
-        for i in range(wb):
-            v = blob[k]
-            k += 1
-            x = (xbyte + i) * 2 - G.VIEW_X
-            scr[yy - G.VIEW_Y][x] = v >> 4
-            scr[yy - G.VIEW_Y][x + 1] = v & 15
+    pix, cmds, up = front
+    d = block - 1
+    off = sum(bw * h for bw, h in up[:d])       # 앞선 깊이들이 차지한 바이트
+    bw, h = up[d]
+    blk = cmds[d]
+    dx = blk[4] | (blk[5] << 8)
+    dy = blk[6] | (blk[7] << 8)
+    for row in range(h):
+        for i in range(bw):
+            v = pix[off + row * bw + i]
+            x = dx + i * 2 - G.VIEW_X
+            scr[dy + row - G.VIEW_Y][x] = v >> 4
+            scr[dy + row - G.VIEW_Y][x + 1] = v & 15
 
 
 def face_widths():
@@ -267,8 +276,9 @@ def write_tcl(outdir):
 def check(outdir):
     from PIL import Image
     idm, rgbm = C.build_maps()
-    runs, _, _, _ = C.build_runs(idm, rgbm, PAL)
-    fronts = C.build_front(PAL)
+    lines, _, _, _ = C.build_runs(idm, rgbm, PAL)
+    runs = [b for ln in lines for b in ln]      # 줄별로 나뉘어 나온다(뱅크 때문)
+    front = C.build_front(PAL)          # (픽셀, HMMM 명령, 올리기 표)
     widths = face_widths()
     bad = 0
     for name, (grid, px, py, f) in CASES.items():
@@ -280,8 +290,8 @@ def check(outdir):
         pos_ok = (gx, gy, gf) == (px, py, f)
         vis_ok = gvis == vis and gpost == post
 
-        scr = emulate(runs, fronts, vis, post)
-        draw_front(scr, fronts, block)
+        scr = emulate(runs, front, vis, post)
+        draw_front(scr, front, block)
         shot = Image.open(os.path.join(outdir, name + ".png")).convert("RGB").load()
         diff = sum(shot[SHOT_OX + G.VIEW_X + x, SHOT_OY + G.VIEW_Y + y] != RGB888[scr[y][x]]
                    for y in range(G.VIEW_H) for x in range(G.VIEW_W))

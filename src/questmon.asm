@@ -14,26 +14,21 @@
 ; 0 으로 채워진 빈 뱅크를 가리키면 딱 그 꼴이 되어 멈춘 것처럼 보인다.
 ;-----------------------------------------------------------------------------
 
-SPR_X       equ 32              ; 던전 칸(16,8) 96x96 안에 64x64 를 가운데로
-SPR_Y       equ 24
+; 그림을 던전 뷰포트 한가운데에 놓는다. SCREEN 8 에서는 96x96 이라 뷰포트를
+; 꽉 채우고(딱 0 이 된다), SCREEN 5 에서는 64x64 라 16 픽셀씩 여백이 남는다.
+SPR_X       equ VIEW_X + (VIEW_W - SPR_W) / 2
+SPR_Y       equ VIEW_Y + (VIEW_H - SPR_H) / 2
+SPR_XB      equ SPR_X / PXB
 
 ; A = y, E = x(바이트).  HL = VRAM 주소.
 ; TextAddr 는 x 를 픽셀로 받지만 그림은 바이트 단위라 따로 둔다.
+; DE 를 지켜야 한다. DrawMap 이 D 에 화면 y 를 들고 이 루틴을 부른다.
 RowAddrB:
-    ld l, a
-    ld h, 0
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl                  ; y * 128
-    ld a, e
-    add a, l
-    ld l, a
-    ret nc
-    inc h
+    call RowAddr
+    push de
+    ld d, 0
+    add hl, de
+    pop de
     ret
 
 ;-----------------------------------------------------------------------------
@@ -77,7 +72,7 @@ DrawMonsterPic:
 
     push hl                     ; 자료 포인터를 지킨다
     ld a, (SprCol)
-    add a, SPR_X / 2
+    add a, SPR_XB
     ld e, a
     ld a, (SprY)
     call RowAddrB

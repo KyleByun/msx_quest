@@ -13,13 +13,31 @@
 import io
 import os
 from PIL import Image
+from quest_pal import to332
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SRC = r"D:\my\python\dnd\images"
 CACHE = os.path.join(HERE, "sprites")       # 원본이 없어질 때를 대비해 남긴다
 
+# 그림을 화면에 얼마나 크게 찍는가. 원본은 64x64 뿐이라 여기서 키운다고 자세해
+# 지지는 않지만, 던전 뷰포트가 96x96 이라 96 이면 화면을 꽉 채운다. 투명한 곳은
+# 아예 안 그리므로 배경(던전)은 그대로 보인다.
+#
+# SCREEN 8 로 가면서 올렸다. 4bpp 에서는 64x64 여도 8,338 바이트라 뱅크 두 개를
+# 썼는데, 8bpp 96x96 은 31,057 바이트로 네 개다. 그럴 자리가 생겼기 때문이다.
 W = H = 64
+BPP = 4
+PRE = "quest"                   # 결과 파일 이름 앞머리 (8bpp 면 "quest8")
+
+# 원본 크기. 여기서 W x H 로 늘려 쓴다.
+SRC_W = SRC_H = 64
+
+
+def set_mode(bpp, size, pre):
+    global BPP, W, H, PRE
+    assert bpp in (4, 8), bpp
+    BPP, W, H, PRE = bpp, size, size, pre
 
 # 그림 -> 표시 이름. 수치는 quest_rules.py 가 monster_stats.py 에서 가져온다.
 SPRITES = [
@@ -35,7 +53,7 @@ ALPHA_MIN = 128         # 이보다 흐리면 투명으로 본다
 
 
 def load(name):
-    """원본에서 읽고 프로젝트 안에도 남긴다."""
+    """원본에서 읽고 프로젝트 안에도 남긴다. 저장은 늘 원본 크기(64x64)로 한다."""
     if not os.path.isdir(CACHE):
         os.makedirs(CACHE)
     kept = os.path.join(CACHE, name)
@@ -43,8 +61,11 @@ def load(name):
     if os.path.exists(src):
         im = Image.open(src).convert("RGBA")
         im.save(kept)
-        return im
-    return Image.open(kept).convert("RGBA")
+    else:
+        im = Image.open(kept).convert("RGBA")
+    if im.size != (W, H):
+        im = im.resize((W, H), Image.LANCZOS)
+    return im
 
 
 def to_runs_linear(im, pal, nearest):
@@ -55,30 +76,39 @@ def to_runs_linear(im, pal, nearest):
     """
     px = im.load()
     data = []
+    nb = W // 2 if BPP == 4 else W       # 한 줄의 바이트 수
     for y in range(H):
         opaque = []
         colour = []
-        for xb in range(W // 2):
-            x = xb * 2
-            a0, a1 = px[x, y][3], px[x + 1, y][3]
-            on = a0 >= ALPHA_MIN or a1 >= ALPHA_MIN
-            opaque.append(on)
-            if not on:
-                colour.append(0)
-                continue
-            c0 = px[x, y][:3] if a0 >= ALPHA_MIN else px[x + 1, y][:3]
-            c1 = px[x + 1, y][:3] if a1 >= ALPHA_MIN else px[x, y][:3]
-            colour.append((nearest(pal, c0) << 4) | nearest(pal, c1))
+        if BPP == 8:
+            # 8bpp 는 한 바이트가 한 픽셀이라 반올림이 없다. 투명한 픽셀은
+            # 정말로 건드리지 않으므로 가장자리 테두리도 안 생긴다.
+            for x in range(W):
+                on = px[x, y][3] >= ALPHA_MIN
+                opaque.append(on)
+                colour.append(to332(px[x, y][:3]) if on else 0)
+        else:
+            for xb in range(W // 2):
+                x = xb * 2
+                a0, a1 = px[x, y][3], px[x + 1, y][3]
+                on = a0 >= ALPHA_MIN or a1 >= ALPHA_MIN
+                opaque.append(on)
+                if not on:
+                    colour.append(0)
+                    continue
+                c0 = px[x, y][:3] if a0 >= ALPHA_MIN else px[x + 1, y][:3]
+                c1 = px[x + 1, y][:3] if a1 >= ALPHA_MIN else px[x, y][:3]
+                colour.append((nearest(pal, c0) << 4) | nearest(pal, c1))
 
         xb = 0
         prev_end = 0
-        while xb < W // 2:
-            while xb < W // 2 and not opaque[xb]:
+        while xb < nb:
+            while xb < nb and not opaque[xb]:
                 xb += 1
-            if xb >= W // 2:
+            if xb >= nb:
                 break
             start = xb
-            while xb < W // 2 and opaque[xb]:
+            while xb < nb and opaque[xb]:
                 xb += 1
             run = xb - start
             while run > 254:                    # 한 런은 254 바이트까지
@@ -128,8 +158,8 @@ def build_banks(pal, nearest):
 
     for bi in range(len(banks)):
         banks[bi].append("    ds %d - ($ - 0x%04X), 0" % (BANK_SIZE, BANK_BASE))
-        banks[bi].append('    SAVEBIN "build/questspr%d.bin", 0x%04X, %d'
-                         % (bi, BANK_BASE, BANK_SIZE))
+        banks[bi].append('    SAVEBIN "build/%sspr%d.bin", 0x%04X, %d'
+                         % (PRE, bi, BANK_BASE, BANK_SIZE))
 
     consts = ["SPR_W        equ %d" % W,
               "SPR_H        equ %d" % H,

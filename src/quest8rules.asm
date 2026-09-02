@@ -111,21 +111,24 @@ HERO_BASE_HP equ 30
 HERO_BASE_AC equ 12
 
 ; --- 몬스터 그림이 어느 뱅크 어디에 있는가 -----------------------------
-SPR_W        equ 64
-SPR_H        equ 64
-SPR_BANKS    equ 2
+SPR_W        equ 96
+SPR_H        equ 96
+SPR_BANKS    equ 5
 SPR_FIRSTBK  equ 3
 SPR_BANK_0   equ 3                  ; GOBLIN
 SPR_ADDR_0   equ 0xA000
 SPR_BANK_1   equ 3                  ; SLIME
-SPR_ADDR_1   equ 0xA34D
-SPR_BANK_2   equ 3                  ; DWARF
-SPR_ADDR_2   equ 0xA85C
-SPR_BANK_3   equ 3                  ; TROLL
-SPR_ADDR_3   equ 0xAE34
-SPR_BANK_4   equ 3                  ; COBRA
-SPR_ADDR_4   equ 0xB429
-SPR_BANK_5   equ 4                  ; MIMIC
+SPR_ADDR_1   equ 0xAB4E
+SPR_BANK_2   equ 4                  ; DWARF
+SPR_ADDR_2   equ 0xA000
+SPR_BANK_3   equ 5                  ; TROLL
+SPR_ADDR_3   equ 0xA000
+SPR_BANK_4   equ 6                  ; COBRA
+SPR_ADDR_4   equ 0xA000
+SPR_BANK_5   equ 7                  ; MIMIC
 SPR_ADDR_5   equ 0xA000
-; 뱅크 3: 6667 / 8192 바이트
-; 뱅크 4: 1671 / 8192 바이트
+; 뱅크 3: 7664 / 8192 바이트
+; 뱅크 4: 5570 / 8192 바이트
+; 뱅크 5: 5821 / 8192 바이트
+; 뱅크 6: 5827 / 8192 바이트
+; 뱅크 7: 6175 / 8192 바이트

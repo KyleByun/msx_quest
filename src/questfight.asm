@@ -288,6 +288,10 @@ HeroAttack:
     ld a, (hl)
     ld (DmgMod), a
 
+    ld a, (AtkMode)             ; 특수 명령이면 이번 한 방만 손본다
+    or a
+    call nz, ApplyMode
+
     ld a, (MonKind)             ; 맞는 쪽 AC 는 표에서
     call MonTypePtr
     ld a, (hl)                  ; T_AC
@@ -379,6 +383,8 @@ MonAttack:
     ld de, P_AC
     add hl, de
     ld a, (hl)
+    inc hl                      ; P_GUARD 가 바로 뒤 - 방어 중이면 더한다
+    add a, (hl)
     ld (TgtAc), a
 
     call DoAttack
@@ -454,6 +460,8 @@ BattleRound:
     call MsgAddNum
     call MsgFlush
     call CalcActs               ; 이 라운드의 행동 횟수를 정한다
+    xor a
+    ld (FleeDone), a
     ld a, 1
     ld (ActPass), a
 
@@ -476,8 +484,24 @@ BattleRound:
 .heroacts:
     ld a, 1
     ld (PassActed), a
+    ld a, (TurnHero)            ; 내 차례가 왔으니 방어 태세를 푼다
+    call PartyPtr
+    ld de, P_GUARD
+    add hl, de
+    ld (hl), 0
+    ld a, (TurnHero)            ; 쓰러진 사람에게는 묻지 않는다
+    call PartyPtr
+    ld de, P_HP
+    add hl, de
+    ld a, (hl)
+    or a
+    jr z, .heroskip
     ld a, (TurnHero)
-    call HeroAttack
+    call AskCommand             ; A = 고른 명령, MenuHero = 그 사람
+    call DoCommand
+    ld a, (FleeDone)
+    or a
+    jp nz, .roundend            ; 도망쳤으면 남은 차례는 없다
     call CountMonsters
     or a
     jr z, .won
@@ -507,36 +531,341 @@ BattleRound:
 .nomon:
     ld a, (TurnHero)            ; 둘 다 끝났으면 이 바퀴가 끝
     cp PARTY_N
-    jr c, .turn
+    jp c, .turn                 ; 명령 메뉴가 끼면서 jr 사거리를 넘었다
     ld a, (TurnMon)
     cp MON_N
-    jr c, .turn
+    jp c, .turn
 
     ld a, (PassActed)           ; 아무도 못 움직였으면 라운드도 끝
     or a
     jr z, .roundend
     ld hl, ActPass
     inc (hl)
-    jr .pass
+    jp .pass
 
 .roundend:
+    call MenuClear              ; 명령 자리를 비워 둔다
     ld a, (RoundNo)
     inc a
     ld (RoundNo), a
     jp DrawParty
 
 .won:
+    call MenuClear
     ld hl, TxtWon
     call MsgAddStr
     call MsgFlush
     call EndBattle
     jp DrawParty
 .lost:
+    call MenuClear
     ld hl, TxtLost
     call MsgAddStr
     call MsgFlush
     call EndBattle
     jp DrawParty
+
+;-----------------------------------------------------------------------------
+; 명령 메뉴 - 양피지 아래 세 줄
+;
+; 기록창 위 LOG_ROWS 줄은 전투 기록이 그대로 흘러가고, 아래 세 줄에 지금 움직일
+; 사람과 고를 수 있는 명령 넷을 띄운다. 무슨 일이 있었는지 보면서 고를 수 있다.
+;
+; 명령은 **행동마다** 묻는다. 민첩이 높으면 한 라운드에 여러 번 나오는데, 그때마다
+; 다시 고를 수 있어야 문서의 반실시간 취지에 맞는다.
+;
+;   0 ATTACK  일반 공격          1 DEFEND  다음 내 차례까지 AC +4
+;   2 FLEE    파티 전체 후퇴 판정  3 (직업별) ClassSkill 표의 특수 명령
+;
+; 한 줄에 둘씩 놓아 메뉴가 세 줄(이름 + 명령 두 줄)이면 된다. 남는 세 줄은 위의
+; 전투 기록이 가져간다 - 한 줄에 하나씩 놓았더니 기록이 일곱 줄뿐이었다.
+;
+; 입력은 커서 넷으로 고르고 스페이스로 결정한다. 여기서 눌린 것을 prevKey 에
+; 바로 반영하므로, 결정한 스페이스가 밖으로 나가 라운드를 또 넘기지 않는다.
+;-----------------------------------------------------------------------------
+CMD_N       equ 4
+
+; A = 영웅 번호 -> A = 고른 명령 (0..3)
+AskCommand:
+    ld (MenuHero), a
+    xor a
+    ld (MenuSel), a
+    call MenuDraw
+.loop:
+    call WaitVBlank
+    call ReadInput
+    ld a, (keyState)            ; 새로 눌린 것만
+    ld b, a
+    ld a, (prevKey)
+    cpl
+    and b
+    ld c, a
+    ld a, b
+    ld (prevKey), a
+
+    bit KEY_SPACE, c
+    jr nz, .done
+
+    ; 메뉴가 2x2 라 커서 이동이 곧 비트 뒤집기다 - 색인의 bit0 이 열, bit1 이 줄이다.
+    ; 줄도 열도 둘뿐이라 반대쪽으로 가는 것과 되돌아 감기는 것이 같은 동작이라,
+    ; 위/아래를 가르지 않고 좌/우도 가르지 않는다. B 는 뒤집을 비트.
+    ; (여기서 keyState 를 B 에 담았지만 위에서 prevKey 로 옮긴 뒤로는 죽은 값이다)
+    ASSERT CMD_N == 4, command menu cursor assumes a 2x2 grid
+    ld b, 1                     ; 좌우 = 열을 바꾼다
+    bit KEY_LEFT, c
+    jr nz, .move
+    bit KEY_RIGHT, c
+    jr nz, .move
+    ld b, 2                     ; 상하 = 줄을 바꾼다
+    bit KEY_UP, c
+    jr nz, .move
+    bit KEY_DOWN, c
+    jr z, .loop
+.move:
+    ld a, (MenuSel)
+    xor b
+    ld (MenuSel), a
+    call MenuDraw
+    jr .loop
+.done:
+    ld a, (MenuSel)
+    ret
+
+; 메뉴를 다시 그린다. 고른 줄 앞에만 화살표를 붙인다.
+MenuDraw:
+    call MenuClear
+    ld c, MSG_Y + MENU_ROW * MSG_DY     ; 첫 줄 - 누구 차례인가
+    ld b, MSG_X
+    call SetPos
+    ld a, COL_BLACK
+    ld b, COL_CREAM
+    call SetColours
+    ld a, (MenuHero)
+    call PartyPtr
+    ld b, NAME_LEN
+    call PutStrN
+
+    xor a
+    ld (MenuIdx), a
+.row:
+    ld a, (MenuIdx)             ; 한 줄에 둘씩 - 줄은 색인의 절반
+    srl a
+    add a, MENU_ROW + 1
+    add a, a
+    add a, a
+    add a, a                    ; * MSG_DY
+    add a, MSG_Y
+    ld c, a                     ; C = y
+    ld a, (MenuIdx)             ; 짝수면 왼쪽 칸, 홀수면 오른쪽 칸
+    and 1
+    jr z, .left
+    ld b, MSG_X + 9 * FONT_W
+    jr .havex
+.left:
+    ld b, MSG_X
+.havex:
+    call SetPos
+    ld a, COL_BLACK
+    ld b, COL_CREAM
+    call SetColours
+    ld a, (MenuIdx)             ; 고른 줄이면 화살표
+    ld hl, MenuSel
+    cp (hl)
+    ld hl, TxtMenuOn
+    jr z, .mark
+    ld hl, TxtMenuOff
+.mark:
+    call PutStr
+    ld a, (MenuIdx)
+    call CmdName
+    call PutStr
+    ld hl, MenuIdx
+    inc (hl)
+    ld a, (hl)
+    cp CMD_N
+    jr c, .row
+    ret
+
+; A = 명령 번호 -> HL = 그 이름. 3 번은 직업마다 다르다.
+CmdName:
+    cp 3
+    jr z, .skill
+    add a, a
+    ld l, a
+    ld h, 0
+    ld de, CmdNames
+    add hl, de
+    ld a, (hl)
+    inc hl
+    ld h, (hl)
+    ld l, a
+    ret
+.skill:
+    ld a, (MenuHero)
+    call PartyPtr
+    ld de, P_CLASS
+    add hl, de
+    ld a, (hl)
+    ld h, a
+    ld e, SKILL_STRIDE
+    call Mult8
+    ld de, ClassSkill + SK_NAME
+    add hl, de
+    ret
+
+CmdNames:
+    dw TxtCmdAtk, TxtCmdDef, TxtCmdFlee
+
+TxtMenuOn:  db ">", 0
+TxtMenuOff: db " ", 0
+TxtCmdAtk:  db "ATTACK", 0
+TxtCmdDef:  db "DEFEND", 0
+TxtCmdFlee: db "FLEE", 0
+TxtGuard:   db " GUARDS", 0
+TxtFled:    db "PARTY FLEES", 0
+TxtNoFlee:  db " CANNOT FLEE", 0
+
+;-----------------------------------------------------------------------------
+; 고른 명령을 실행한다. A = 명령 번호. 누가 하는지는 AskCommand 가 MenuHero 에
+; 넣어 둔 값을 쓴다 - 명령을 A 로 받아야 부르는 쪽에서 갈아 끼울 수 있다.
+;-----------------------------------------------------------------------------
+DoCommand:
+    ld (MenuSel), a
+    or a
+    jr z, .attack
+    dec a
+    jr z, .defend
+    dec a
+    jr z, .flee
+
+    ld a, (MenuHero)            ; 직업별 특수 - 표의 효과 번호를 AtkMode 로
+    call PartyPtr
+    ld de, P_CLASS
+    add hl, de
+    ld a, (hl)
+    ld h, a
+    ld e, SKILL_STRIDE
+    call Mult8
+    ld de, ClassSkill + SK_EFF
+    add hl, de
+    ld a, (hl)
+    ld (AtkMode), a
+    cp 1                        ; 1 = 행동 폭증. 때리지 않고 차례만 늘린다.
+    jr nz, .attack2
+    xor a
+    ld (AtkMode), a
+    ld hl, ActHero
+    ld a, (MenuHero)
+    call AddA
+    inc (hl)                    ; 이번 라운드에 한 번 더
+    ld a, (MenuHero)
+    call PartyPtr
+    ld b, NAME_LEN
+    call MsgAddStrN
+    ld hl, TxtSurge
+    call MsgAddStr
+    jp MsgFlush
+.attack2:
+    ld a, (MenuHero)
+    jp HeroAttack
+
+.attack:
+    xor a
+    ld (AtkMode), a
+    ld a, (MenuHero)
+    jp HeroAttack
+
+.defend:
+    ld a, (MenuHero)            ; 다음 내 차례까지 AC +4
+    call PartyPtr
+    ld de, P_GUARD
+    add hl, de
+    ld (hl), 4
+    ld a, (MenuHero)
+    call PartyPtr
+    ld b, NAME_LEN
+    call MsgAddStrN
+    ld hl, TxtGuard
+    call MsgAddStr
+    jp MsgFlush
+
+.flee:                          ; d20 + 민첩 보정 >= 12 면 파티가 빠져나간다
+    ld a, (MenuHero)
+    call PartyPtr
+    ld de, P_DEX
+    add hl, de
+    ld a, (hl)
+    call AbilityMod
+    ld c, a
+    ld a, 20
+    call RandMod
+    inc a
+    add a, c
+    cp 12
+    jr c, .noflee
+    ld hl, TxtFled
+    call MsgAddStr
+    call MsgFlush
+    call EndBattle
+    ld a, 1                     ; 남은 라운드를 멈춘다
+    ld (FleeDone), a
+    ret
+.noflee:
+    ld a, (MenuHero)
+    call PartyPtr
+    ld b, NAME_LEN
+    call MsgAddStrN
+    ld hl, TxtNoFlee
+    call MsgAddStr
+    jp MsgFlush
+
+TxtSurge:   db " SURGES", 0
+
+; AtkMode 에 따라 이번 한 방의 값을 손본다. ClassSkill 표의 효과 번호와 같다.
+;
+;   2 SNEAK  피해 주사위 +1
+;   3 BOLT   지능으로 때린다 (1d8 + 지능보정, MP 는 안 쓴다)
+;   4 SMITE  신성 피해 +4
+;   5 KI     주사위 +2, 대신 명중 -2
+ApplyMode:
+    cp 2
+    jr z, .sneak
+    cp 3
+    jr z, .bolt
+    cp 4
+    jr z, .smite
+.ki:
+    ld hl, DmgCnt
+    inc (hl)
+    inc (hl)
+    ld hl, AtkBonus
+    dec (hl)
+    dec (hl)
+    ret
+.sneak:
+    ld hl, DmgCnt
+    inc (hl)
+    ret
+.smite:
+    ld hl, DmgMod
+    ld a, (hl)
+    add a, 4
+    ld (hl), a
+    ret
+.bolt:
+    ld a, 1
+    ld (DmgCnt), a
+    ld a, 8
+    ld (DmgSides), a
+    ld hl, (FightPtr)
+    ld de, P_INT
+    add hl, de
+    ld a, (hl)
+    call AbilityMod
+    ld (DmgMod), a
+    add a, 2
+    ld (AtkBonus), a
+    ret
 
 ; HL += A. A 파괴.
 AddA:
@@ -664,6 +993,11 @@ StartBattle:
     ld (BattleOn), a
     ld (RoundNo), a
     call MakeEncounter
+    ; 미니맵과 전투 기록은 **같은 양피지 자리**를 쓴다. 지도를 켜 둔 채로 싸우면
+    ; 지도가 글자를 덮어 "1 TROLL" 이 "1" 만 남는다(x=144 부터 지도가 가린다).
+    ; 그래서 전투가 시작되면 지도를 접는다. 전투 중에는 M 도 안 받는다.
+    xor a
+    ld (MapOn), a
     call MsgClear
 
     ld a, (MonCount)            ; "3 GOBLIN" 처럼

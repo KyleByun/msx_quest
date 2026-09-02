@@ -24,34 +24,35 @@ VIS_OFS      equ 7
 ; 색. 4bpp 는 팔레트 번호, 8bpp 는 GRB332 값 그대로다.
 ; *_BYTE 는 그 색으로 한 바이트를 채울 때 쓰는 값 - 4bpp 는 같은 색
 ; 픽셀 둘이라 17 을 곱하고, 8bpp 는 한 바이트가 한 픽셀이라 그대로다.
-COL_BLACK    equ 9
-COL_PANEL    equ 4
-COL_CREAM    equ 0
-COL_SHADE    equ 6
-COL_HERO     equ 14              ; 미니맵의 내 위치 (파랑)
-BLACK_BYTE   equ 153
-CREAM_BYTE   equ 0
-SHADE_BYTE   equ 102
+COL_BLACK    equ 0
+COL_PANEL    equ 182
+COL_CREAM    equ 255
+COL_SHADE    equ 146
+COL_HERO     equ 107              ; 미니맵의 내 위치 (파랑)
+BLACK_BYTE   equ 0
+CREAM_BYTE   equ 255
+SHADE_BYTE   equ 146
 
 ; 화면 모드. 4bpp 는 한 바이트에 픽셀 둘, 8bpp 는 하나.
-BPP          equ 4
-PXB          equ 2              ; 한 바이트에 든 픽셀 수
-VIEW_XB      equ 8              ; 뷰포트 왼쪽의 바이트 위치
-VRAM_ROW     equ 128              ; 한 스캔라인의 VRAM 바이트 수
+BPP          equ 8
+PXB          equ 1              ; 한 바이트에 든 픽셀 수
+VIEW_XB      equ 16              ; 뷰포트 왼쪽의 바이트 위치
+VRAM_ROW     equ 256              ; 한 스캔라인의 VRAM 바이트 수
 
 ; 정면 벽 픽셀을 놓아 둘 화면 밖 VRAM 의 첫 줄
 FRONT_VY     equ 256
-FRONT_PIX_LEN equ 3784
+FRONT_PIX_LEN equ 7568
 
 ; 뱅크 배치. 3 부터 그림 -> 배경 -> 정면 벽 -> 벽면 런 순서다.
 ; 그림 뱅크 수가 모드마다 다르므로(SPR_BANKS) 숫자를 박지 않고 계산한다.
 ; questrules.asm 을 questconst.asm 보다 **먼저** include 해야 한다.
-BG_BANKS     equ 1
+BG_BANKS     equ 2
 FRONT_BANKS  equ 1
-RUN_BANKS    equ 2
+RUN_BANKS    equ 3
 BG_BANK      equ SPR_FIRSTBK + SPR_BANKS
 FRONT_BANK   equ BG_BANK + BG_BANKS
 RUN_BANK0    equ FRONT_BANK + FRONT_BANKS
 
 ; 배경 RLE 는 뱅크마다 따로 압축했다. 뱅크별 길이.
-BG_LEN_0     equ 6344
+BG_LEN_0     equ 3298
+BG_LEN_1     equ 5569

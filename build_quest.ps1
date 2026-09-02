@@ -21,8 +21,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "sjasmplus failed with exit code $LASTEXITCODE" }
 
     # 0xA000 창에 걸리는 뱅크들. 순서가 곧 뱅크 번호(3 부터)다.
-    $bankFiles = @(Get-ChildItem "src/questspr*.asm" | Sort-Object Name) +
-                 @(Get-Item "src/questbgbank.asm")
+    # 여기 순서를 바꾸면 src/quest.asm 의 BG_BANK / FRONT_BANK 도 같이 고쳐야 한다.
+    # quest8* 는 SCREEN 8 판(build_quest3.ps1)이 쓰므로 여기서는 걸러 낸다.
+    $bankFiles = @(Get-ChildItem "src/questspr*.asm"       | Sort-Object Name) +
+                 @(Get-ChildItem "src/questbgbank*.asm"    | Sort-Object Name) +
+                 @(Get-ChildItem "src/questfrontbank*.asm" | Sort-Object Name) +
+                 @(Get-ChildItem "src/questrunbank*.asm"   | Sort-Object Name)
     foreach ($f in $bankFiles) {
         & $SJASMPLUS --msg=war $f.FullName
         if ($LASTEXITCODE -ne 0) { throw "sjasmplus failed on $($f.Name)" }

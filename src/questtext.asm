@@ -13,7 +13,11 @@
 ; 짧은 구간에는 nop 을 넣어 맞췄다. 아래 주석의 숫자가 그 계산이다.
 ;-----------------------------------------------------------------------------
 
-; 니블 -> 두 픽셀 바이트 표를 만든다. (TextFg, TextBg) 를 보고 채운다.
+; 니블 -> 픽셀 바이트 표를 만든다. (TextFg, TextBg) 를 보고 채운다.
+;
+; 니블 하나가 픽셀 넷이다. SCREEN 5 는 한 바이트에 픽셀이 둘이라 니블당 두
+; 바이트(표 32 바이트), SCREEN 8 은 하나라 니블당 네 바이트(표 64 바이트)다.
+; 8bpp 쪽이 훨씬 짧다 - 픽셀을 상위 니블로 미는 시프트가 통째로 없어진다.
 BuildExpand:
     ld hl, ExpandTbl
     ld c, 0                     ; 니블 값 0~15
@@ -24,6 +28,22 @@ BuildExpand:
     rlca
     rlca                        ; 니블을 상위로 올려 rlca 로 왼쪽부터 꺼낸다
     ld e, a
+    IFDEF SCREEN8
+    ld b, 4                     ; 픽셀 넷 = 바이트 넷
+.px:
+    ld a, e
+    rlca
+    ld e, a
+    jr nc, .off
+    ld a, (TextFg)
+    jr .put
+.off:
+    ld a, (TextBg)
+.put:
+    ld (hl), a
+    inc hl
+    djnz .px
+    ELSE
     ld b, 2                     ; 바이트 둘
 .byte:
     push bc
@@ -50,6 +70,7 @@ BuildExpand:
     inc hl
     pop bc
     djnz .byte
+    ENDIF
     inc c
     ld a, c
     cp 16
@@ -71,23 +92,16 @@ SetPos:
     ld (TextY), a
     ret
 
-; A = y, E = x  ->  HL = VRAM 주소 (한 줄 128 바이트, 한 바이트에 두 픽셀)
+; A = y, E = x(픽셀)  ->  HL = VRAM 주소
 TextAddr:
-    ld l, a
-    ld h, 0
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl
-    add hl, hl                  ; y * 128
-    srl e                       ; x / 2
+    call RowAddr
+    push hl
     ld a, e
-    add a, l
-    ld l, a
-    ret nc
-    inc h
+    call XToByte
+    ld e, a
+    ld d, 0
+    pop hl
+    add hl, de
     ret
 
 ;-----------------------------------------------------------------------------
@@ -129,9 +143,29 @@ PutChar:
     and 0xF0
     rrca
     rrca
-    rrca                        ; 상위 니블 * 2
+    IFNDEF SCREEN8
+    rrca                        ; 4bpp: 니블당 두 바이트라 상위 니블 * 2
+    ENDIF                       ; 8bpp: 니블당 네 바이트라 상위 니블 * 4
     ld l, a
     ld h, ExpandTbl >> 8        ; 표가 페이지 머리에 있어 하위만 바꾸면 된다
+    IFDEF SCREEN8
+    ld b, 8                     ; 니블 둘 = 픽셀 여덟 = 바이트 여덟
+    ld a, c
+    and 0x0F
+    add a, a
+    add a, a
+    ld c, a                     ; 아래 니블의 표 자리를 미리 잡아 둔다
+.px:
+    ld a, (hl)                  ; 7
+    out (VDP_DATA), a           ; 11
+    inc l                       ; 4
+    ld a, b                     ; 4
+    cp 5                        ; 7  - 넷을 찍었으면 아래 니블로 옮긴다
+    jr nz, .same                ; 7/12
+    ld l, c                     ; 4
+.same:
+    djnz .px                    ; 13/8  -> 한 바이트에 최소 40 T-state
+    ELSE
     ld a, (hl)
     out (VDP_DATA), a           ; 11
     inc l                       ;  4
@@ -150,6 +184,7 @@ PutChar:
     nop                         ;  4
     nop                         ;  4  -> 30 T-state
     out (VDP_DATA), a
+    ENDIF
     pop hl
     pop bc
     inc b                       ; 다음 줄
@@ -306,6 +341,9 @@ MsgClear:
 ;
 ; 오른쪽 창은 계속 흘러가야 하므로 줄을 찍기 전에 늘 한 칸 올린다. 맨 아래 줄을
 ; 비우고 거기에 새 줄을 찍으면 스크롤이 된다.
+;
+; 창 전체가 아니라 **위 LOG_ROWS 줄만** 민다. 아래 여섯 줄은 명령 메뉴 자리라
+; 같이 밀면 메뉴가 위로 올라가 버린다.
 ;-----------------------------------------------------------------------------
 MsgScroll:
     ld a, 32
@@ -326,7 +364,7 @@ CmdScroll:
     dw MSG_X
     dw MSG_Y
     dw MSG_W * FONT_W
-    dw (MSG_ROWS - 1) * MSG_DY
+    dw (LOG_ROWS - 1) * MSG_DY
     db 0
     db 0
     db 0xD0                     ; HMMM
@@ -334,10 +372,27 @@ CmdScroll:
 ; R#36 부터: DX, DY, NX, NY, CLR, ARG, CMD
 CmdClearLast:
     dw MSG_X
-    dw MSG_Y + (MSG_ROWS - 1) * MSG_DY
+    dw MSG_Y + (LOG_ROWS - 1) * MSG_DY
     dw MSG_W * FONT_W
     dw MSG_DY
-    db COL_CREAM * 17           ; 같은 색 두 픽셀
+    db CREAM_BYTE
+    db 0
+    db 0xC0                     ; HMMV
+
+; 아래쪽 명령 메뉴 영역만 지운다.
+MenuClear:
+    ld a, 36
+    ld (CmdFirst), a
+    ld hl, CmdClearMenu
+    ld b, 11
+    jp SendVdpCmd
+
+CmdClearMenu:
+    dw MSG_X
+    dw MSG_Y + MENU_ROW * MSG_DY
+    dw MSG_W * FONT_W
+    dw MENU_ROWS * MSG_DY
+    db CREAM_BYTE
     db 0
     db 0xC0                     ; HMMV
 
@@ -346,7 +401,7 @@ CmdClearAll:
     dw MSG_Y
     dw MSG_W * FONT_W
     dw MSG_ROWS * MSG_DY
-    db COL_CREAM * 17
+    db CREAM_BYTE
     db 0
     db 0xC0                     ; HMMV
 
@@ -445,7 +500,7 @@ MsgAddNum:
 ; 모은 줄을 맨 아래에 찍는다. 그 전에 한 줄 올려서 흘러가게 한다.
 MsgFlush:
     call MsgScroll
-    ld c, MSG_Y + (MSG_ROWS - 1) * MSG_DY
+    ld c, MSG_Y + (LOG_ROWS - 1) * MSG_DY
     ld b, MSG_X
     call SetPos
     ld a, COL_BLACK

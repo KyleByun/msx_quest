@@ -8,7 +8,7 @@ MSX2 + Z80 어셈블리로 만든 카트리지 롬 두 개입니다. 한 저장�
 |---|---|---|
 | 무엇 | Zanac 풍 **종스크롤 슈팅** | Bard's Tale 풍 **1인칭 던전** |
 | 크기 | 16KB | 128KB (ASCII8 매퍼) |
-| 진입 | `src/main.asm` | `src/quest.asm` |
+| 진입 | `src/main.asm` | `src/quest3.asm` (SCREEN 8) |
 | 초점 | 60fps 를 놓치지 않는 처리량 | 이동할 때의 쾌적함 |
 
 <p align="center">
@@ -34,7 +34,7 @@ Zanac 참고 이미지에서 뽑은 그래픽으로 만들었습니다. 어셈�
 
 칸 단위 이동에 90도 회전만 있는 Wizardry / Bard's Tale 형식입니다. **실행 중에 레이캐스팅을 하지 않습니다.**
 
-칸 단위로만 움직이면 화면에 나올 벽면의 모양이 서 있는 위치와 무관하게 언제나 같습니다. 모양이 상수면 그 위에 입히는 텍스처도 상수입니다. 그래서 화면좌표 → 텍스처좌표 변환을 **원근 나눗셈까지 포함해 빌드 시점에 전부 풀어 픽셀로 구워** 둡니다. 실행 중에 Z80 이 하는 일은 "이 칸이 벽인가"를 보고 바이트를 옮기는 것뿐입니다. 한 번 다시 그리는 데 **99ms** 입니다.
+칸 단위로만 움직이면 화면에 나올 벽면의 모양이 서 있는 위치와 무관하게 언제나 같습니다. 모양이 상수면 그 위에 입히는 텍스처도 상수입니다. 그래서 화면좌표 → 텍스처좌표 변환을 **원근 나눗셈까지 포함해 빌드 시점에 전부 풀어 픽셀로 구워** 둡니다. 실행 중에 Z80 이 하는 일은 "이 칸이 벽인가"를 보고 바이트를 옮기는 것뿐입니다. 한 번 다시 그리는 데 **150ms**(SCREEN 8, 256색) 입니다.
 
 파티와 전투는 파이썬으로 짜 둔 D&D 구현에서 **판정 계층을 그대로 옮겼습니다.** 능력치 보정과 기본 공격 보정은 파이썬 원본을 빌드할 때 실제로 실행해서 표로 구워 넣습니다 — `(점수-10)//2` 의 내림 나눗셈이나 `int(레벨*0.75)` 같은 것을 Z80 에서 흉내 내면 틀리기 쉽기 때문입니다.
 
@@ -45,15 +45,18 @@ Zanac 참고 이미지에서 뽑은 그래픽으로 만들었습니다. 어셈�
 ## 빌드
 
 ```powershell
-.\build.ps1          # src/main.asm  -> build/game.rom  (16KB)
-.\build_quest.ps1    # src/quest.asm -> build/quest.rom (128KB)
+.\build.ps1          # src/main.asm   -> build/game.rom   (16KB)
+.\build_quest3.ps1   # src/quest3.asm -> build/quest3.rom (128KB, SCREEN 8) <- 지금 쓰는 것
+.\build_quest.ps1    # src/quest.asm  -> build/quest.rom  (128KB, SCREEN 5 보관용)
 
 .\run.ps1            # game.rom 을 창으로 실행
+.\run_quest3.ps1     # quest3.rom 을 창으로 실행
 .\verify.ps1         # 창 없이 부팅해 화면을 저장
 .\verify_quest.ps1
-.\verify_quest_sides.ps1   # 던전 화면 회귀 검증 (알려진 지도 여섯 개)
-\verify_quest_map.ps1     # 지도 48장의 연결성 + 안개 걷기 검증
-\verify_quest_turns.ps1   # 민첩이 정하는 전투 행동 횟수 검증
+.\verify_quest_sides.ps1   # 던전 화면 회귀 검증 (알려진 지도 일곱 개, 4bpp 전용)
+.\verify_quest_map.ps1     # 지도 48장의 연결성 + 안개 걷기 검증
+.\verify_quest_turns.ps1   # 민첩이 정하는 전투 행동 횟수 + 명령 메뉴 검증
+.\verify_questprobe.ps1    # SCREEN 8 대역폭/색/명령엔진 측정 (doc/screen8.md)
 ```
 
 필요한 것은 **sjasmplus 1.23.1**, **openMSX 21.0**, **uv**(파이썬) 셋입니다. 도구 경로는 `tools.ps1` 한 곳에만 적혀 있습니다.
@@ -69,6 +72,7 @@ Zanac 참고 이미지에서 뽑은 그래픽으로 만들었습니다. 어셈�
 | [`doc/build_setup.md`](doc/build_setup.md) | 빌드 환경과 절차, sjasmplus 함정 |
 | [`doc/z80_mult_div.md`](doc/z80_mult_div.md) | Z80 곱셈·나눗셈 ([Grauw 문서](https://map.grauw.nl/articles/mult_div_shifts.php) 정리) |
 | [`doc/random_map.md`](doc/random_map.md) | NetHack 식 랜덤 맵 생성, 미니맵과 방향 화살표, 입력 확장 |
+| [`doc/screen8.md`](doc/screen8.md) | SCREEN 8 (256색) 으로 옮긴 과정 - 재 본 것, VDP 명령 엔진, 뱅크 배치 |
 | [`README_game.md`](README_game.md) | 슈팅 게임 — 처리량, 하드웨어 스크롤, 스프라이트 한계 |
 | [`README_quest.md`](README_quest.md) | 던전 게임 — 원근 굽기, D&D 포팅, 겪은 버그들 |
 
@@ -101,7 +105,7 @@ Two MSX2 cartridge ROMs written in Z80 assembly. Both live in one repository and
 |---|---|---|
 | What | Zanac-style **vertical scrolling shooter** | Bard's Tale-style **first-person dungeon** |
 | Size | 16KB | 128KB (ASCII8 mapper) |
-| Entry point | `src/main.asm` | `src/quest.asm` |
+| Entry point | `src/main.asm` | `src/quest3.asm` (SCREEN 8) |
 | Focus | Throughput — never dropping below 60fps | How comfortable movement feels |
 
 <p align="center">
@@ -127,7 +131,7 @@ It has enemies, post-hit invulnerability, rising difficulty, a mid-boss at 2 min
 
 Wizardry / Bard's Tale style: you move one cell at a time and turn in 90-degree steps. **There is no raycasting at runtime.**
 
-If movement is restricted to whole cells, the shape of every wall surface on screen is always the same, regardless of where you are standing. And if the shape is constant, so is the texture laid over it. So the screen-to-texture coordinate transform — **perspective divide included — is solved entirely at build time and baked into pixels.** All the Z80 does at runtime is ask "is this cell a wall?" and move bytes. One full redraw takes **99ms**.
+If movement is restricted to whole cells, the shape of every wall surface on screen is always the same, regardless of where you are standing. And if the shape is constant, so is the texture laid over it. So the screen-to-texture coordinate transform — **perspective divide included — is solved entirely at build time and baked into pixels.** All the Z80 does at runtime is ask "is this cell a wall?" and move bytes. One full redraw takes **150ms** (SCREEN 8, 256 colours).
 
 The party and combat are a port of the **resolution layer** from a Python D&D implementation. Ability modifiers and base attack bonus are baked into lookup tables by *actually running the Python source at build time* — things like the floor division in `(score-10)//2` or `int(level*0.75)` are easy to get subtly wrong when reimplemented in Z80.
 
@@ -138,15 +142,18 @@ Combat alternates one attacker at a time, Bard's Tale style, with the log scroll
 ## Building
 
 ```powershell
-.\build.ps1          # src/main.asm  -> build/game.rom  (16KB)
-.\build_quest.ps1    # src/quest.asm -> build/quest.rom (128KB)
+.\build.ps1          # src/main.asm   -> build/game.rom   (16KB)
+.\build_quest3.ps1   # src/quest3.asm -> build/quest3.rom (128KB, SCREEN 8) <- current
+.\build_quest.ps1    # src/quest.asm  -> build/quest.rom  (128KB, SCREEN 5, archived)
 
 .\run.ps1            # launch game.rom in a window
+.\run_quest3.ps1     # launch quest3.rom in a window
 .\verify.ps1         # boot headless and save a screenshot
 .\verify_quest.ps1
-.\verify_quest_sides.ps1   # dungeon render regression (six known maps)
-\verify_quest_map.ps1     # connectivity of 48 generated maps + fog reveal
-\verify_quest_turns.ps1   # DEX-driven action counts in combat
+.\verify_quest_sides.ps1   # dungeon render regression (seven known maps, 4bpp only)
+.\verify_quest_map.ps1     # connectivity of 48 generated maps + fog reveal
+.\verify_quest_turns.ps1   # DEX-driven action counts + command menu
+.\verify_questprobe.ps1    # SCREEN 8 bandwidth / colour / command-engine measurements
 ```
 
 You need three things: **sjasmplus 1.23.1**, **openMSX 21.0**, and **uv** (for Python). Tool paths live in exactly one place, `tools.ps1`.

@@ -2,6 +2,7 @@
 build/*
 !build/game.rom
 !build/quest.rom
+!build/quest3.rom
 
 __pycache__/
 *.pyc

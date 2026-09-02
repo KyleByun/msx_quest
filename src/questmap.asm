@@ -11,13 +11,14 @@
 MINIMAP_X       equ 144          ; 셀 하나 3바이트(6픽셀) * 16 = 96x96
 MINIMAP_Y       equ 10
 MINIMAP_CELL    equ 6            ; 한 칸의 픽셀 높이
-MINIMAP_ROW_BYTES equ MAP_W * 3  ; 한 맵 행의 바이트 수 (셀당 3)
+MINIMAP_ROW_BYTES equ MAP_W * MINIMAP_CELL / PXB
+MINIMAP_XB        equ MINIMAP_X / PXB
 
-MINIMAP_WALL_BYTE  equ COL_SHADE * 17   ; 회색 두 픽셀
-MINIMAP_FLOOR_BYTE equ COL_BLACK * 17   ; 검정 두 픽셀
+MINIMAP_WALL_BYTE  equ SHADE_BYTE
+MINIMAP_FLOOR_BYTE equ BLACK_BYTE
 ; 아직 안 가 본 칸은 양피지 색으로 둔다. MsgClear 가 창을 지우는 색과 같아서,
 ; 걸어 다니면 빈 양피지 위로 지도가 조금씩 드러나는 것처럼 보인다.
-MINIMAP_UNSEEN_BYTE equ COL_CREAM * 17
+MINIMAP_UNSEEN_BYTE equ CREAM_BYTE
 
 ; M 키가 새로 눌릴 때 지도 표시를 켜거나 끈다.
 ToggleMap:
@@ -60,12 +61,13 @@ DrawMap:
     ld a, MINIMAP_WALL_BYTE
 .store:
     inc hl
-    ld (de), a                  ; 6픽셀 = 같은 색 두 픽셀 3바이트
-    inc de
+    push bc                     ; 한 칸 = MINIMAP_CELL 픽셀
+    ld b, MINIMAP_CELL / PXB    ; 4bpp 면 3 바이트, 8bpp 면 6 바이트
+.fill:
     ld (de), a
     inc de
-    ld (de), a
-    inc de
+    djnz .fill
+    pop bc
     inc c
     ld a, c
     cp MAP_W
@@ -78,7 +80,7 @@ DrawMap:
 .scanline:
     push bc
     ld a, d
-    ld e, MINIMAP_X / 2
+    ld e, MINIMAP_XB
     call RowAddrB
     call SetVramWrite
     ld hl, MiniMapRow
@@ -131,11 +133,14 @@ DrawHero:
     ld h, (hl)
     ld l, a                     ; HL = 그 방향의 패턴
 
-    ld a, (posX)                ; 바이트 x = (MINIMAP_X + posX*6) / 2
+    ld a, (posX)                ; 바이트 x = MINIMAP_XB + posX * (MINIMAP_CELL/PXB)
     ld b, a
     add a, a
-    add a, b                    ; posX * 3
-    add a, MINIMAP_X / 2
+    add a, b                    ; posX * 3  (4bpp 에서 한 칸이 3 바이트)
+    IFDEF SCREEN8
+    add a, a                    ; 8bpp 는 한 칸이 6 바이트
+    ENDIF
+    add a, MINIMAP_XB
     ld (HeroXb), a
 
     ld a, (posY)                ; 화면 y = MINIMAP_Y + posY*6
@@ -156,7 +161,7 @@ DrawHero:
     call RowAddrB
     call SetVramWrite
     pop hl
-    ld b, MINIMAP_CELL / 2      ; 6 픽셀 = 3 바이트
+    ld b, MINIMAP_CELL / PXB
     ld c, VDP_DATA
 .wr:
     outi

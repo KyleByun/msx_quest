@@ -80,6 +80,24 @@ GAME_CLASSES = [
 MP_BY_LEVEL = [0, 4, 6, 14, 17, 27, 32, 38, 44, 57, 64]
 MAX_LEVEL = len(MP_BY_LEVEL) - 1
 
+# 직업별 특수 명령. quest_sena.md 의 명령 목록 중 **지금 있는 자료만으로 되는
+# 것** 하나씩을 골랐다. 아이템/장비/상태이상은 그 체계 자체가 아직 없다.
+#
+#   SURGE  행동 폭증  - 이번 라운드에 한 번 더 움직인다
+#   SNEAK  암습       - 피해 주사위 한 개 추가
+#   BOLT   소마법     - MP 를 안 쓰고 지능으로 때린다 (마법사의 물리 공격은 약하다)
+#   SMITE  신성 강타  - 물리 공격에 신성 피해를 더한다
+#   KI     일도양단   - 주사위 두 개 추가, 대신 맞히기 어렵다
+#
+# 효과 번호는 questfight.asm 의 AtkMode 와 같다.
+CLASS_SKILL = {
+    "FIGHTER": ("SURGE", 1),
+    "ROGUE":   ("SNEAK", 2),
+    "WIZARD":  ("BOLT",  3),
+    "CLERIC":  ("SMITE", 4),
+    "MUSA":    ("KI",    5),
+}
+
 HERO_BASE_HP = 30       # constants.py
 HERO_BASE_AC = 12       # constants.py
 
@@ -181,6 +199,18 @@ SPR_HDR = """; 이 파일은 gfx/quest_rules.py 가 만든다. 직접 고치지 
 """
 
 
+# 화면 모드. 아래 __main__ 이 인자를 보고 정한다.
+#   4bpp  SCREEN 5. 몬스터는 64x64, 팔레트 16색을 여섯 마리가 나눠 쓴다.
+#   8bpp  SCREEN 8. 몬스터는 96x96(던전 뷰포트를 꽉 채운다), 색은 각자 GRB332.
+#
+# 원본 그림이 64x64 뿐이라 키운다고 자세해지지는 않는다. 큰 것은 색이다 -
+# 재 보니 원본 63색이 16색 팔레트에서는 14색으로 뭉개지고 GRB332 에서는 45색으로
+# 남는다. 여섯 마리가 열여섯 칸을 나눠 쓰던 것이 없어진다.
+BPP = 4
+SPR_SIZE = 64
+PRE = "quest"
+
+
 def main():
     R = load_rules()
     import quest_font as F
@@ -214,7 +244,7 @@ def main():
     A("PARTY_STRIDE equ 32                 ; 2 의 거듭제곱이라 색인이 시프트로 끝난다")
     fields = ["P_NAME", "P_CLASS", "P_RACE", "P_STR", "P_DEX", "P_CON", "P_INT",
               "P_WIS", "P_CHA", "P_LEVEL", "P_HP", "P_MAXHP", "P_AC", "P_ATK",
-              "P_DCNT", "P_DSIDE", "P_DMOD", "P_SPL", "P_MAXSPL"]
+              "P_DCNT", "P_DSIDE", "P_DMOD", "P_SPL", "P_MAXSPL", "P_GUARD"]
     NAME_LEN = 12
     off = 0
     for f in fields:
@@ -254,6 +284,11 @@ def main():
     A("MSG_DY       equ 8                 ; 2 의 거듭제곱이라 곱셈이 시프트로 끝난다")
     A("MSG_ROWS     equ 13                ; 라운드 머리글 + 영웅 6 + 몬스터 5 + 여유")
     A("MSG_W        equ 17                ; 한 줄 글자 수 (136 + 17*6 = 238)")
+    A("; 창을 위아래로 나눈다. 위는 전투 기록이 흘러가고 아래는 명령 메뉴다.")
+    A("; 명령을 한 줄에 둘씩 놓아 메뉴가 3 줄이면 되므로 기록이 10 줄을 쓴다.")
+    A("LOG_ROWS     equ 10")
+    A("MENU_ROW     equ LOG_ROWS")
+    A("MENU_ROWS    equ MSG_ROWS - LOG_ROWS")
     A("")
 
     # ---- 폰트 ----
@@ -316,6 +351,9 @@ def main():
     A("C_ABBREV     equ 11")
     A("C_NAME       equ 13")
     A("MAX_LEVEL    equ %d" % MAX_LEVEL)
+    A("SKILL_STRIDE equ 11")
+    A("SK_EFF       equ 0                 ; 효과 번호")
+    A("SK_NAME      equ 1                 ; 0 으로 끝나는 이름")
     to_data()
     A("ClassTable:")
     babmap = {"good": 0, "average": 1, "poor": 2}
@@ -332,6 +370,14 @@ def main():
     A("; 레벨별 최대 MP (quest_sena.md). 색인이 레벨이라 0 번은 안 쓴다.")
     A("MpTable:")
     A("    db " + ", ".join(str(v) for v in MP_BY_LEVEL))
+    A("")
+    A("; 직업별 특수 명령 - 효과 번호(AtkMode) + 이름 9 글자 + 끝표시 0")
+    A("; 이름을 0 으로 끝내지 않으면 PutStr 이 다음 줄까지 읽어 버린다.")
+    A("ClassSkill:")
+    for name, _d, _b, _a, _c, _bon, _dmg in GAME_CLASSES:
+        sk, eff = CLASS_SKILL[name]
+        A("    db %d" % eff + "   ; %s" % name)
+        A(db_str(pad(sk, 9)) + ", 0")
     A("")
 
     # ---- 몬스터표 ----
@@ -380,6 +426,7 @@ def main():
     # ---- 몬스터 그림을 ROM 뱅크로 굽는다 --------------------------------
     import quest_sprite as SP
     SP.SPRITES = [(m["img"], m["name"]) for m in R["monsters"]]
+    SP.set_mode(BPP, SPR_SIZE, PRE)
     banks, spr_const = SP.build_banks(PAL333, nearest_idx)
     to_const()
     A("")
@@ -390,13 +437,13 @@ def main():
     hdr = ("; 이 파일은 gfx/quest_rules.py 가 만든다. 직접 고치지 말 것.\n"
            "; 표는 db 라서 ORG 0x4000 뒤에서 include 해야 ROM 에 들어간다.\n\n")
     for bi, blines in enumerate(banks):
-        with io.open(os.path.join(ROOT, "src", "questspr%d.asm" % bi), "w",
+        with io.open(os.path.join(ROOT, "src", "%sspr%d.asm" % (PRE, bi)), "w",
                      encoding="utf-8", newline="\n") as f:
             f.write(SPR_HDR % bi + "\n".join(blines) + "\n")
-    with io.open(os.path.join(ROOT, "src", "questrules.asm"), "w",
+    with io.open(os.path.join(ROOT, "src", PRE + "rules.asm"), "w",
                  encoding="utf-8", newline="\n") as f:
         f.write("\n".join(L) + "\n")
-    with io.open(os.path.join(ROOT, "src", "questruledata.asm"), "w",
+    with io.open(os.path.join(ROOT, "src", PRE + "ruledata.asm"), "w",
                  encoding="utf-8", newline="\n") as f:
         f.write(hdr + "\n".join(D) + "\n")
     print("wrote src/questrules.asm (%d 줄), src/questruledata.asm (%d 줄)"
@@ -406,4 +453,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--bpp" in sys.argv and sys.argv[sys.argv.index("--bpp") + 1] == "8":
+        BPP, SPR_SIZE, PRE = 8, 96, "quest8"
     main()

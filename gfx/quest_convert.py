@@ -14,7 +14,7 @@ from PIL import Image
 import os
 import quest_geom as G
 import quest_tex as T
-from quest_pal import PAL333, COL_HERO, nearest as _nearest
+from quest_pal import PAL333, COL_HERO, nearest as _nearest, to332
 from quest_map import MAP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -110,6 +110,49 @@ def snap333(c):
 # 같은 규칙을 두 군데 적어 두면 한쪽만 틀어진다.
 nearest = _nearest
 
+# --------------------------------------------------------------------------
+# 화면 모드 - SCREEN 5 (4bpp) 인가 SCREEN 8 (8bpp) 인가
+# --------------------------------------------------------------------------
+# 굽는 기하와 런 구조는 두 모드가 똑같다. 다른 것은 **픽셀 하나가 몇 바이트인가**
+# 뿐이라, 색을 바이트로 바꾸는 자리 한 곳(pack2)과 폭을 세는 자리 한 곳(BPB)만
+# 갈라 두면 나머지는 그대로 돈다. 파일을 두 벌로 복사하지 않는 이유다.
+#
+#   SCREEN 5  한 바이트에 픽셀 둘. 팔레트 16색에 맞춰 양자화한다.
+#   SCREEN 8  한 바이트에 픽셀 하나. 팔레트가 없고 색이 GRB332 로 못박혀 있어서
+#             256색을 그대로 쓴다 - 양자화도 예약 색도 필요 없다.
+BPP = 4
+BPB = 1                     # 픽셀 두 개가 몇 바이트인가 (4bpp=1, 8bpp=2)
+
+
+def set_bpp(bpp):
+    global BPP, BPB
+    assert bpp in (4, 8), bpp
+    BPP, BPB = bpp, 1 if bpp == 4 else 2
+
+
+def pack2(pal, c0, c1):
+    """가로로 이웃한 픽셀 두 개 -> 바이트 목록. 모드에 따라 1 개나 2 개."""
+    if BPP == 4:
+        return [(nearest(pal, c0) << 4) | nearest(pal, c1)]
+    return [to332(c0), to332(c1)]
+
+
+def colval(pal_or_i, i=None):
+    """팔레트 번호 -> 그 모드의 픽셀 값. 4bpp 는 번호, 8bpp 는 GRB332 값."""
+    return pal_or_i if BPP == 4 else to332(to888(PAL333[pal_or_i]))
+
+
+def fillbyte(i):
+    """그 색으로 한 바이트를 채울 때 쓰는 값."""
+    return colval(i) * 17 if BPP == 4 else colval(i)
+
+
+def pack2i(pal, i0, i1):
+    """팔레트 번호로 주어진 픽셀 두 개. 배경과 화살표처럼 이미 번호인 것에 쓴다."""
+    if BPP == 4:
+        return [(i0 << 4) | i1]
+    return [to332(to888(pal[i0])), to332(to888(pal[i1]))]
+
 
 def rle(data):
     """0x80|n = 다음 바이트를 n+1 회 반복, 그 외 n = 이어지는 n+1 바이트 그대로."""
@@ -189,9 +232,10 @@ def build_runs(idm, rgb, pal):
     어긋나므로 여기서 면 번호마다 블록 수와 폭이 하나뿐인지 확인한다.
     """
     W, H = G.VIEW_W, G.VIEW_H
-    data, maxruns = [], 0
+    lines, maxruns = [], 0
     nblk_of, width_of = {}, {}
     for y in range(H):
+        data = []
         row = idm[y]
         runs, cur, n = [], row[0], 0
         for xb in range(0, W, 2):
@@ -219,27 +263,25 @@ def build_runs(idm, rgb, pal):
                     fid = band_id(f, K)
                     bakers = [(lambda k: lambda jj, x, yy: T.bake_front(k, x, yy))(k)
                               for k in range(j + 1, K + 1)] + [T.bake_side_open]
-                    width_of.setdefault(fid, n)
-                    assert width_of[fid] == n, (fid, width_of[fid], n)
+                    width_of.setdefault(fid, n * BPB)
+                    assert width_of[fid] == n * BPB, (fid, width_of[fid], n)
             nblk = 1 + len(bakers)
             nblk_of.setdefault(fid, nblk)
             assert nblk_of[fid] == nblk, (fid, nblk_of[fid], nblk)
 
-            data += [fid, n]
+            data += [fid, n * BPB]
             for i in range(n):                      # 블록 0: 그 면의 그림 그대로
                 x = (xb + i) * 2
-                hi = nearest(pal, rgb[y][x])
-                lo = nearest(pal, rgb[y][x + 1])
-                data.append((hi << 4) | lo)
+                data += pack2(pal, rgb[y][x], rgb[y][x + 1])
             for baker in bakers:
                 for i in range(n):
                     x = (xb + i) * 2
-                    hi = nearest(pal, baker(sid // 4, G.VIEW_X + x, G.VIEW_Y + y))
-                    lo = nearest(pal, baker(sid // 4, G.VIEW_X + x + 1, G.VIEW_Y + y))
-                    data.append((hi << 4) | lo)
+                    data += pack2(pal, baker(sid // 4, G.VIEW_X + x, G.VIEW_Y + y),
+                                  baker(sid // 4, G.VIEW_X + x + 1, G.VIEW_Y + y))
             xb += n
         data += [0, 0]
-    return data, maxruns, nblk_of, width_of
+        lines.append(data)
+    return lines, maxruns, nblk_of, width_of
 
 
 # --------------------------------------------------------------------------
@@ -276,35 +318,126 @@ def arrow_patterns(pal):
             for xb in range(0, 6, 2):
                 hi = COL_HERO if r[xb] == 'X' else black
                 lo = COL_HERO if r[xb + 1] == 'X' else black
-                blob.append((hi << 4) | lo)
+                blob += pack2i(pal, hi, lo)
         out.append(blob)
         rows = rot90(rows)
     return out
 
 
-def build_front(pal):
-    """정면 벽 비트맵. d = 1..MAXD, 각각 RECT[d] 사각형을 채운다.
+# --------------------------------------------------------------------------
+# 런 자료를 8KB 뱅크로 나눈다
+# --------------------------------------------------------------------------
+# 본체(0x4000-0x9FFF, 뱅크 0~2)는 이미 꽉 찼는데 벽면 런만 12KB 다. 8bpp 로 가면
+# 24KB 라 아예 안 들어간다. 그래서 런을 0xA000 창으로 내린다.
+#
+# 줄마다 **(뱅크, 주소)** 를 표에 적어 두고 줄머리에서 그것을 꺼내 쓴다. 뱅크
+# 경계를 그때그때 검사하는 방법도 있지만, 그러려면 "한 줄이 뱅크에 안 걸친다"는
+# 약속에다 "줄이 끝난 자리가 곧 다음 줄의 시작"이라는 약속까지 걸어야 한다.
+# 남는 자리를 메우는 순간 두 번째 약속이 깨진다. 표는 96*3 = 288 바이트뿐이고
+# 줄머리에서 40 T 밖에 안 드니(96 줄이면 1.1 ms) 약속을 안 거는 편이 낫다.
+RUN_BANK0 = 7                                   # 3~4 그림, 5 배경, 6 정면 벽
+BANK_SIZE = 8192
+BANK_WIN = 0xA000
 
-    형식: startY, 높이, xByte, 바이트폭, 그 뒤 픽셀
+
+def bank_file(pre, kind, i, blob, note):
+    """8KB 뱅크 하나를 감싸는 .asm 을 낸다. 뱅크 수가 모드와 자료 크기에 따라
+    달라지므로 손으로 관리하지 않는다 - 한 번만 어긋나도 롬이 통째로 엉킨다."""
+    L = ["; gfx/quest_convert.py 가 생성한 파일입니다. 직접 고치지 마세요.",
+         ";",
+         "; %s (%d 바이트)" % (note, len(blob)),
+         "",
+         "    DEVICE NOSLOT64K",
+         "",
+         "    ORG 0x%04X" % BANK_WIN,
+         db("", list(blob)),
+         "",
+         "    ds 0x%04X - $, 0xFF" % (BANK_WIN + BANK_SIZE),
+         '    SAVEBIN "build/%s%s%d.bin", 0x%04X, 0x%04X'
+         % (pre, kind, i, BANK_WIN, BANK_SIZE)]
+    open(os.path.join(ROOT, "src", "%s%s%d.asm" % (pre, kind, i)), "w",
+         encoding="utf-8").write("\n".join(L) + "\n")
+
+
+def split_bg(packed):
+    """배경 픽셀을 뱅크에 들어갈 만큼씩 잘라 각각 RLE 로 압축한다.
+
+    RLE 를 통째로 한 뒤 자르면 자르는 자리가 레코드 한가운데일 수 있다. 픽셀
+    쪽에서 자르면 그런 일이 없고, 뱅크마다 독립적으로 풀 수 있다 - 푸는 쪽은
+    VRAM 주소를 이어서 쓰기만 하면 된다.
     """
-    blobs = []
+    n = 1
+    while True:
+        step = -(-len(packed) // n)
+        chunks = [rle(packed[i:i + step]) for i in range(0, len(packed), step)]
+        if all(len(c) <= BANK_SIZE for c in chunks):
+            return chunks
+        n += 1
+
+
+def pack_run_banks(lines):
+    """줄 단위로 뱅크에 채운다. 한 줄이 뱅크에 걸치지 않게만 하면 된다 -
+    줄 안에서는 포인터가 앞으로만 가므로 그 뒤로는 검사할 것이 없다."""
+    banks, tab = [bytearray()], []
+    for ln in lines:
+        assert len(ln) <= BANK_SIZE, len(ln)
+        if len(banks[-1]) + len(ln) > BANK_SIZE:
+            banks.append(bytearray())
+        tab.append((RUN_BANK0 + len(banks) - 1, BANK_WIN + len(banks[-1])))
+        banks[-1] += bytes(ln)
+    return banks, tab
+
+
+# 정면 벽을 놓아 둘 화면 밖 VRAM 의 첫 줄. SCREEN 5 는 한 페이지가 256 줄이고
+# 화면에 나오는 것은 212 줄뿐이라, 줄 256 부터는 페이지 1 로 아무도 안 쓴다.
+# VDP 명령의 y 좌표는 10 비트(0~1023)라 거기까지 그대로 짚을 수 있다.
+FRONT_VY = 256
+
+
+def build_front(pal):
+    """정면 벽. 픽셀을 **VRAM 에 미리 풀어 두고** 그릴 때는 VDP 에게 오려 붙이라고
+    시킨다(HMMM).
+
+    왜 이렇게 하나. 정면 벽은 깊이 1 일 때 73x73 = 5,329 픽셀로 뷰포트의 57.8%
+    다. 화면에서 제일 큰 한 덩어리이고, 게다가 **사각형 하나**다. 사각형 하나는
+    VDP 명령 하나로 끝나므로 런마다 명령을 보내야 하는 다른 면들과 사정이 다르다.
+    잰 값으로 픽셀당 Z80 은 9.5 us, HMMM 은 4.6 us 라 깊이 1 에서 50 ms 가
+    24 ms 로 준다.
+
+    덤으로 이 픽셀은 부팅 때 한 번만 읽히므로 본체 뱅크에 있을 이유가 없다.
+
+    돌려주는 것 셋
+      pix   화면 밖 VRAM 에 그대로 올릴 픽셀. 깊이별로 세로로 쌓는다.
+      cmds  깊이별 HMMM 명령 블록 (R#32 부터 SX,SY,DX,DY,NX,NY,CLR,ARG,CMD)
+      up    올릴 때 쓰는 표 (바이트폭, 줄 수)
+    """
+    pix, cmds, up = [], [], []
+    vy = FRONT_VY
     for d in range(1, G.MAXD + 1):
         l, t, r, b = G.RECT[d]
         l &= ~1
         r = (r + 1) & ~1
-        w = (r - l) // 2
-        blob = [t, b - t + 1, l // 2, w]
+        w = r - l                       # 픽셀 폭 (짝수)
+        bw = w // 2 * BPB               # 한 줄의 바이트 수
+        h = b - t + 1
         for y in range(t, b + 1):
-            for xb in range(w):
+            for xb in range(w // 2):
                 x = l + xb * 2
-                hi = nearest(pal, T.bake_front(d, x, y))
-                lo = nearest(pal, T.bake_front(d, x + 1, y))
-                blob.append((hi << 4) | lo)
-        blobs.append(blob)
-    return blobs
+                pix += pack2(pal, T.bake_front(d, x, y),
+                             T.bake_front(d, x + 1, y))
+        cmds.append([0, 0, vy & 0xFF, vy >> 8,              # SX, SY
+                     l & 0xFF, l >> 8, t & 0xFF, t >> 8,    # DX, DY
+                     w & 0xFF, w >> 8, h & 0xFF, h >> 8,    # NX, NY
+                     0, 0, 0xD0])                           # CLR, ARG, HMMM
+        up.append([bw, h])
+        vy += h
+    assert vy <= 1024, vy                # 명령 y 좌표가 10 비트다
+    return pix, cmds, up
 
 
-def main():
+def main(bpp=4):
+    set_bpp(bpp)
+    pre = "quest" if bpp == 4 else "quest8"
     im = Image.open(SRC).convert("RGB")
     assert im.size == (256, 212), im.size
 
@@ -335,19 +468,34 @@ def main():
     BLACK = pal.index((0, 0, 0))
 
     # ---- 배경 ----
-    idxbg = [[nearest(pal, px[x, y]) for x in range(256)] for y in range(212)]
-    for y in range(G.VIEW_Y - 4, G.VIEW_Y + G.VIEW_H + 4):
-        for x in range(G.VIEW_X - 4, G.VIEW_X + G.VIEW_W + 4):
-            idxbg[y][x] = BLACK
+    # 4bpp 는 팔레트 16색에 맞춘다. 8bpp 는 팔레트가 없으니 그림 색을 그대로
+    # GRB332 로 옮긴다 - 재 보니 RLE 가 8,780 에서 8,867 바이트로 87 바이트밖에
+    # 안 늘었다. 이걸로 크림(0)과 흰색(12)이 GRB332 에서 겹치던 것도 없어진다.
+    inside_view = lambda x, y: (G.VIEW_X - 4 <= x < G.VIEW_X + G.VIEW_W + 4 and
+                                G.VIEW_Y - 4 <= y < G.VIEW_Y + G.VIEW_H + 4)
     packed = bytearray()
-    for y in range(212):
-        for x in range(0, 256, 2):
-            packed.append((idxbg[y][x] << 4) | idxbg[y][x + 1])
-    comp = rle(bytes(packed))
-    print("배경: 원본 %d -> RLE %d 바이트" % (len(packed), len(comp)))
+    if BPP == 8:
+        for y in range(212):
+            for x in range(256):
+                packed.append(0 if inside_view(x, y) else to332(px[x, y]))
+    else:
+        idxbg = [[nearest(pal, px[x, y]) for x in range(256)] for y in range(212)]
+        for y in range(212):
+            for x in range(256):
+                if inside_view(x, y):
+                    idxbg[y][x] = BLACK
+        for y in range(212):
+            for x in range(0, 256, 2):
+                packed += bytes(pack2i(pal, idxbg[y][x], idxbg[y][x + 1]))
+    bgchunks = split_bg(bytes(packed))
+    comp = b"".join(bgchunks)
+    print("배경: 원본 %d -> RLE %d 바이트, 뱅크 %d 개"
+          % (len(packed), len(comp), len(bgchunks)))
 
     # ---- 런 + 구운 픽셀 ----
-    runs, maxruns, nblk_of, width_of = build_runs(idm, rgb, pal)
+    lines, maxruns, nblk_of, width_of = build_runs(idm, rgb, pal)
+    runs = [b for ln in lines for b in ln]
+    runbanks, runtab = pack_run_banks(lines)
     assert len(width_of) == NFACE * 0 + len(set(width_of)), width_of
     print("벽면 런+픽셀: %d 바이트 (한 줄 최대 %d 런, 면 번호 %d 개)"
           % (len(runs), maxruns, NUM_IDS))
@@ -361,9 +509,10 @@ def main():
         sw.append(ws.pop())
     print("면별 띠 안 폭:", sw)
 
-    fronts = build_front(pal)
-    ftotal = sum(len(b) for b in fronts)
-    print("정면 벽 %d 개: %d 바이트" % (len(fronts), ftotal))
+    fpix, fcmds, fup = build_front(pal)
+    frontbanks = [fpix[i:i + BANK_SIZE] for i in range(0, len(fpix), BANK_SIZE)]
+    print("정면 벽 %d 개: 픽셀 %d 바이트(뱅크로 내려감) + 명령 %d 바이트"
+          % (len(fcmds), len(fpix), len(fcmds) * 15))
 
     pb = []
     for r, g, b in pal:
@@ -393,22 +542,56 @@ def main():
         "VIS_SKIPN    equ %d" % VIS_SKIPN,
         "VIS_OFS      equ %d" % VIS_OFS,
         "",
-        "COL_BLACK    equ %d" % BLACK,
-        "COL_PANEL    equ %d" % nearest(pal, (182, 182, 182)),
-        "COL_CREAM    equ %d" % nearest(pal, (255, 255, 219)),
-        "COL_SHADE    equ %d" % nearest(pal, (146, 146, 146)),
-        "COL_HERO     equ %d              ; 미니맵의 내 위치 (파랑)" % COL_HERO,
-        "BG_RLE_LEN   equ %d" % len(comp),
+        "; 색. 4bpp 는 팔레트 번호, 8bpp 는 GRB332 값 그대로다.",
+        "; *_BYTE 는 그 색으로 한 바이트를 채울 때 쓰는 값 - 4bpp 는 같은 색",
+        "; 픽셀 둘이라 17 을 곱하고, 8bpp 는 한 바이트가 한 픽셀이라 그대로다.",
+        "COL_BLACK    equ %d" % colval(BLACK),
+        "COL_PANEL    equ %d" % colval(nearest(pal, (182, 182, 182))),
+        "COL_CREAM    equ %d" % colval(nearest(pal, (255, 255, 219))),
+        "COL_SHADE    equ %d" % colval(nearest(pal, (146, 146, 146))),
+        "COL_HERO     equ %d              ; 미니맵의 내 위치 (파랑)" % colval(COL_HERO),
+        "BLACK_BYTE   equ %d" % fillbyte(BLACK),
+        "CREAM_BYTE   equ %d" % fillbyte(nearest(pal, (255, 255, 219))),
+        "SHADE_BYTE   equ %d" % fillbyte(nearest(pal, (146, 146, 146))),
+        "",
+        "; 화면 모드. 4bpp 는 한 바이트에 픽셀 둘, 8bpp 는 하나.",
+        "BPP          equ %d" % BPP,
+        "PXB          equ %d              ; 한 바이트에 든 픽셀 수" % (3 - BPB),
+        "VIEW_XB      equ %d              ; 뷰포트 왼쪽의 바이트 위치"
+        % (G.VIEW_X * BPB // 2),
+        "VRAM_ROW     equ %d              ; 한 스캔라인의 VRAM 바이트 수"
+        % (128 * BPB),
+        "",
+        "; 정면 벽 픽셀을 놓아 둘 화면 밖 VRAM 의 첫 줄",
+        "FRONT_VY     equ %d" % FRONT_VY,
+        "FRONT_PIX_LEN equ %d" % len(fpix),
+        "",
+        "; 뱅크 배치. 3 부터 그림 -> 배경 -> 정면 벽 -> 벽면 런 순서다.",
+        "; 그림 뱅크 수가 모드마다 다르므로(SPR_BANKS) 숫자를 박지 않고 계산한다.",
+        "; questrules.asm 을 questconst.asm 보다 **먼저** include 해야 한다.",
+        "BG_BANKS     equ %d" % len(bgchunks),
+        "FRONT_BANKS  equ %d" % len(frontbanks),
+        "RUN_BANKS    equ %d" % len(runbanks),
+        "BG_BANK      equ SPR_FIRSTBK + SPR_BANKS",
+        "FRONT_BANK   equ BG_BANK + BG_BANKS",
+        "RUN_BANK0    equ FRONT_BANK + FRONT_BANKS",
+        "",
+        "; 배경 RLE 는 뱅크마다 따로 압축했다. 뱅크별 길이.",
     ]
-    open(os.path.join(ROOT, "src", "questconst.asm"), "w", encoding="utf-8").write(
+    for i, c in enumerate(bgchunks):
+        consts.append("BG_LEN_%d     equ %d" % (i, len(c)))
+    open(os.path.join(ROOT, "src", pre + "const.asm"), "w", encoding="utf-8").write(
         "\n".join(consts) + "\n")
 
     parts = ["; gfx/quest_convert.py 가 생성한 파일입니다. 직접 고치지 마세요.", ""]
     parts.append(db("PaletteData", pb))
     parts.append("")
-    parts.append("; 스캔라인 런: 줄마다 (면번호, 바이트폭, 픽셀들) 이 이어지고")
-    parts.append("; 폭 0 이면 줄 끝. 뷰포트 위에서 아래로 %d 줄이 연속으로 들어 있다." % G.VIEW_H)
-    parts.append(db("RunData", runs))
+    parts.append("; 스캔라인 런의 자리표. 줄마다 (뱅크, 주소 하위, 주소 상위).")
+    parts.append("; 자료 자체는 뱅크 %d 부터에 있다(questrunbank*.asm)." % RUN_BANK0)
+    parts.append("RunLineTab:")
+    for bank, addr in runtab:
+        parts.append("    db RUN_BANK0 + %d" % (bank - RUN_BANK0))
+        parts.append("    dw 0x%04X" % addr)
     parts.append("")
     parts.append("; 미니맵의 내 위치 화살표. 방향(북동남서)별 6x6, 한 줄 3바이트.")
     arrows = arrow_patterns(pal)
@@ -429,35 +612,55 @@ def main():
     parts.append(db("LatTab", [G.LATERAL[j][k] for j in range(G.NSEG)
                                for k in range(G.NSEG + 1)], per=G.NSEG + 1))
     parts.append("")
-    parts.append("; 정면 벽: 깊이 1..%d 각각 startY, 높이, xByte, 바이트폭, 픽셀" % G.MAXD)
-    parts.append("FrontPtrs:")
+    parts.append("; 정면 벽. 픽셀은 화면 밖 VRAM(줄 %d 아래)에 미리 풀어 두고," % FRONT_VY)
+    parts.append("; 그릴 때는 이 HMMM 명령 하나로 오려 붙인다. 화면에서 제일 큰 한")
+    parts.append("; 덩어리(깊이 1 이면 뷰포트의 57.8%)이고 사각형이라 명령 하나로 끝난다.")
+    parts.append("FrontCmdPtr:")
     for d in range(1, G.MAXD + 1):
-        parts.append("    dw Front%d" % d)
-    for d, blob in enumerate(fronts, 1):
-        parts.append(db("Front%d" % d, blob))
+        parts.append("    dw FrontCmd%d" % d)
+    for d, blk in enumerate(fcmds, 1):
+        parts.append(db("FrontCmd%d" % d, blk, per=15))
+    parts.append("")
+    parts.append("; VRAM 에 올릴 때 쓰는 표: 깊이마다 바이트폭, 줄 수")
+    parts.append(db("FrontUp", [v for pair in fup for v in pair], per=2))
+    parts.append("")
+    parts.append("; 배경 RLE 뱅크마다의 길이 (UnpackBg 가 순서대로 읽는다)")
+    parts.append(db("BgChunkLen",
+                    [v for c in bgchunks for v in (len(c) & 0xFF, len(c) >> 8)],
+                    per=2))
     parts.append("")
     parts.append("; 16x16 던전 맵. 1 = 벽, 0 = 통로. 인덱스는 (y<<4)|x 라 8비트로 끝난다.")
     flat = []
     for row in MAP:
         flat += [1 if c == '#' else 0 for c in row]
     parts.append(db("MapData", flat, per=16))
-    open(os.path.join(ROOT, "src", "questdata.asm"), "w", encoding="utf-8").write(
+    open(os.path.join(ROOT, "src", pre + "data.asm"), "w", encoding="utf-8").write(
         "\n".join(parts) + "\n")
 
-    # 배경은 따로 낸다. quest.rom 은 이것을 8KB 뱅크 하나에 통째로 넣어 0xA000
-    # 창으로 불러 쓰고(questbgbank.asm), quest2.rom 은 본체 안에 그냥 넣는다.
-    # 벽면 자료가 블록 셋으로 늘면서 본체 뱅크(0x4000-0x9FFF)가 꽉 찼기 때문이다.
-    bg = ["; gfx/quest_convert.py 가 생성한 파일입니다. 직접 고치지 마세요.", "",
-          "; 배경 화면 RLE %d 바이트. 끝은 BgRleEnd 대신 BG_RLE_LEN 으로도 잰다" % len(comp),
-          "; (뱅크에 놓으면 링크 시점에 주소를 알 수 없다).",
-          db("BgRle", list(comp)), "BgRleEnd:"]
-    open(os.path.join(ROOT, "src", "questbg.asm"), "w", encoding="utf-8").write(
-        "\n".join(bg) + "\n")
+    # 뱅크 셋. 감싸는 파일까지 전부 여기서 낸다 - 뱅크 수가 모드와 자료 크기에
+    # 따라 달라져서 손으로 관리하면 반드시 어긋난다.
+    for i, c in enumerate(bgchunks):
+        bank_file(pre, "bgbank", i, c,
+                  "배경 화면 RLE %d/%d" % (i + 1, len(bgchunks)))
+    for i, c in enumerate(frontbanks):
+        bank_file(pre, "frontbank", i, c,
+                  "정면 벽 픽셀 %d/%d. 부팅 때 UnpackFront 가 화면 밖 VRAM"
+                  "(줄 %d 아래)으로 옮긴다" % (i + 1, len(frontbanks), FRONT_VY))
+    for i, blob in enumerate(runbanks):
+        bank_file(pre, "runbank", i, blob,
+                  "벽면 런 %d/%d. 줄마다 어느 뱅크 어디인지는 본체의"
+                  " RunLineTab 에 있다" % (i + 1, len(runbanks)))
 
-    total = len(runs) + ftotal + 32 + 256
-    print("wrote src/questconst.asm, src/questdata.asm, src/questbg.asm")
-    print("본체 뱅크 자료 %d 바이트 + 배경 뱅크 %d 바이트" % (total, len(comp)))
+    total = len(runtab) * 3 + len(fcmds) * 15 + 32 + 256
+    print("wrote src/%sconst.asm, src/%sdata.asm, 뱅크 파일 %d 개"
+          % (pre, pre, len(bgchunks) + len(frontbanks) + len(runbanks)))
+    print("본체 자료 %d 바이트 (런 표 %d 포함)" % (total, len(runtab) * 3))
+    print("뱅크: 배경 %d 개(%d B) + 정면벽 %d 개(%d B) + 런 %d 개(%d B)"
+          % (len(bgchunks), len(comp), len(frontbanks), len(fpix),
+             len(runbanks), len(runs)))
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    bpp = 8 if "--bpp" in sys.argv and sys.argv[sys.argv.index("--bpp") + 1] == "8" else 4
+    main(bpp)

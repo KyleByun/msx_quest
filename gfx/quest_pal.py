@@ -62,3 +62,17 @@ def nearest(pal, c):
         if best is None or d < best:
             best, bi = d, i
     return bi
+
+
+def to332(c):
+    """RGB 0~255 -> SCREEN 8 의 GRB332 한 바이트 (bit7-5 G, bit4-2 R, bit1-0 B).
+
+    SCREEN 8 에는 팔레트가 없다. 색이 이 8 비트에 못박혀 있어서 위의 PAL333 처럼
+    "열여섯 자리를 무엇으로 채울까"를 고를 일이 자체가 없다 - 픽셀마다 원하는
+    값을 바로 쓴다. 그래서 nearest 도 RESERVED 도 8bpp 에서는 쓰지 않는다.
+
+    R 과 G 는 3 비트(8 단계)라 RGB333 이 그대로 가고, B 만 2 비트(4 단계)로 준다.
+    """
+    r, g, b = (max(0, min(255, int(round(v)))) for v in c)
+    return ((int(round(g * 7 / 255)) << 5) | (int(round(r * 7 / 255)) << 2)
+            | int(round(b * 3 / 255)))
