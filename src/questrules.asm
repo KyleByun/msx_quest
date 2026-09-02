@@ -100,12 +100,10 @@ T_DEX        equ 6                 ; 민첩 - 라운드당 행동 횟수를 정�
 T_SPRBANK    equ 7                 ; 그림이 든 ROM 뱅크
 T_SPRADDR    equ 8                 ; 그 뱅크 안의 주소
 T_NAME       equ 10
-SYL_HEAD_N     equ 16
-SYL_HEAD_W     equ 5
-SYL_MID_N     equ 8
-SYL_MID_W     equ 2
-SYL_TAIL_N     equ 16
-SYL_TAIL_W     equ 5
+NAME_CONS_N  equ 15
+NAME_VOW_N   equ 5
+NAME_PAT_N   equ 6
+NAME_PAT_W   equ 8
 
 HERO_BASE_HP equ 30
 HERO_BASE_AC equ 12

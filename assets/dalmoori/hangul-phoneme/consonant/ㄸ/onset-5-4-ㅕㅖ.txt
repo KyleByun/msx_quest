@@ -1,0 +1,11 @@
+---
+for = [ㅕㅖ]...
+---
+# # # # . x x x
+# . # . . x x x
+# . # . . x x x
+# # # # . x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

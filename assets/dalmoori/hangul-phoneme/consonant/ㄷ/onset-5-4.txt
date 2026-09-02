@@ -1,0 +1,11 @@
+---
+not-for = [ㅕㅢ]...
+---
+# # # # # x x x
+# . . . . x x x
+# . . . . x x x
+# # # # # x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

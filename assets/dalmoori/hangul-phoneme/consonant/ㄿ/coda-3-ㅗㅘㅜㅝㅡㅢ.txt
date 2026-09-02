@@ -1,0 +1,11 @@
+---
+for = (ㅌ.|.[ㅗㅘㅚㅙㅢㅛㅜㅝㅞㅟㅠㅡ])
+---
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+. . # # # # # .
+# # . # . # . .
+# # # # # # # .

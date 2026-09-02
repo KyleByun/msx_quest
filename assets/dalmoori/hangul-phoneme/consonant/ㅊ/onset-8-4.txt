@@ -1,0 +1,12 @@
+---
+variant.ㅛ = short
+not-for = [ㅗㅛ]..3
+---
+. . # # # . . .
+. # # # # # . .
+. . # . # . . .
+. # . . . # . .
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

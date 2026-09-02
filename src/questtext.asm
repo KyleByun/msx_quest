@@ -107,7 +107,25 @@ TextAddr:
 ;-----------------------------------------------------------------------------
 ; A = 글자 하나를 (TextX, TextY) 에 찍고 TextX 를 FONT_W 만큼 민다.
 ;-----------------------------------------------------------------------------
+; 한 바이트가 곧 한 칸이다. 0x80 이상이면 한글이고, 그 아래는 ASCII 다.
+; 둘 다 8x8 1bpp 비트맵이라 아래 찍는 고리는 그대로 함께 쓴다 - 다른 것은
+; 비트맵을 어디서 가져오는가와 몇 픽셀 나아가는가 둘뿐이다.
 PutChar:
+    cp HAN_BASE
+    jr c, .latin
+
+    sub HAN_BASE                ; 한글 - 번호 * 8 + HanFont
+    ld l, a
+    ld h, 0
+    add hl, hl
+    add hl, hl
+    add hl, hl
+    ld de, HanFont
+    add hl, de
+    ld a, HANGUL_ADV
+    jr .got
+
+.latin:
     sub FONT_FIRST
     jr nc, .lo
     xor a                       ; 범위 밖은 공백으로
@@ -123,6 +141,10 @@ PutChar:
     add hl, hl                  ; 글자당 8 바이트
     ld de, FontData
     add hl, de                  ; HL = 이 글자의 비트맵
+    ld a, FONT_W
+
+.got:
+    ld (CharAdv), a             ; 찍은 뒤 얼마나 나아갈지
 
     ld a, (TextY)
     ld b, a                     ; B = 지금 줄의 y
@@ -191,10 +213,49 @@ PutChar:
     dec c
     jr nz, .row
 
-    ld a, (TextX)               ; 다음 글자 자리로
-    add a, FONT_W
-    ld (TextX), a
+    ld a, (CharAdv)             ; 다음 글자 자리로 - 영문 6, 한글 8
+    ld hl, TextX
+    add a, (hl)
+    ld (hl), a
     ret
+
+;-----------------------------------------------------------------------------
+; MsgText - A = 메시지 번호  ->  HL = 지금 고른 말의 문자열
+;
+; 말을 바꾸는 것은 MsgTab 이 어느 표를 가리키는가 하나뿐이다. 부르는 쪽은
+; 번호만 알면 되고 어느 말인지 몰라도 된다.
+;-----------------------------------------------------------------------------
+MsgText:
+    ld l, a
+    ld h, 0
+    add hl, hl                  ; 표가 워드 배열이다
+    ld de, (MsgTab)
+    add hl, de
+    ld a, (hl)
+    inc hl
+    ld h, (hl)
+    ld l, a
+    ret
+
+;-----------------------------------------------------------------------------
+; SetLang - A = LANG_EN / LANG_KO. 쓸 표를 골라 둔다.
+;-----------------------------------------------------------------------------
+SetLang:
+    ld (Lang), a
+    ld hl, LangTabEN            ; 표 다섯의 주소가 나란히 있는 표
+    or a
+    jr z, .set
+    ld hl, LangTabKO
+.set:
+    ld de, MsgTab               ; MsgTab 부터 다섯 워드가 이어져 있다
+    ld bc, 6 * 2
+    ldir
+    ret
+
+LangTabEN:
+    dw MsgTabEN, MonNameEN, SkillNameEN, ClassNameEN, RaceNameEN, WeaponNameEN
+LangTabKO:
+    dw MsgTabKO, MonNameKO, SkillNameKO, ClassNameKO, RaceNameKO, WeaponNameKO
 
 ;-----------------------------------------------------------------------------
 ; HL = 0 으로 끝나는 문자열

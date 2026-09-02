@@ -1,0 +1,13 @@
+---
+variant.ㅐ = right
+variant.ㅒ = right
+not-for = ㅖ...
+---
+# # # # x x x x
+# . . . x x x x
+# . . . x x x x
+# # # # x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

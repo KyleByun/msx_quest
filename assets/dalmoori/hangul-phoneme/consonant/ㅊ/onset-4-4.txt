@@ -1,0 +1,12 @@
+---
+variant.ㅔ = down
+not-for = ㅙ...0
+---
+. # . . x x x x
+# # # . x x x x
+. # . . x x x x
+# . # . x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

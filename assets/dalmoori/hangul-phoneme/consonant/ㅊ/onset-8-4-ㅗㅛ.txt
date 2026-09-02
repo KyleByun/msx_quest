@@ -1,0 +1,12 @@
+---
+for = [ㅗㅛ]..3
+not-for = ..[ㄱㄲㄳㄴㅅㅆ].
+---
+. . # # # . . .
+# # # # # # # .
+. # . . . # . .
+# . . . . . # .
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

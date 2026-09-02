@@ -44,6 +44,8 @@
     include "src/questrules.asm"
     include "src/questconst.asm"
     ENDIF
+    include "src/questmsgconst.asm"   ; 말과 상관없이 한 벌뿐이다
+    include "src/questgearconst.asm"
 
 ;--- 입출력 포트 ---------------------------------------------------------------
 VDP_DATA    equ 0x98
@@ -132,6 +134,9 @@ Seed        ds 2                ; 난수 상태
 ; 파티 만들 때 쓰는 임시 자리. 스택으로 돌리면 읽기 어려워져서 이름을 붙였다.
 ClassUsed   ds 2                ; 이미 뽑은 직업 자리표 (열한 직업)
 NamePtr     ds 2
+NamePatPtr  ds 2                ; 이름 무늬를 훑는 자리
+NamePrev    ds 1                ; 방금 쓴 글자 (같은 글자가 잇따르지 않게)
+NameIdx     ds 1
 TmpClassMods ds 2
 TmpRaceMods ds 2
 TmpLevel    ds 1
@@ -147,6 +152,49 @@ RoundNo     ds 1
 CmdFirst    ds 1                ; VDP 명령 블록의 시작 레지스터 번호
 MsgPos      ds 2
 MsgBuf      ds 24
+Lang        ds 1                ; LANG_EN / LANG_KO
+numKey      ds 1                ; 0 행의 숫자 1~6
+prevNum     ds 1
+StatOn      ds 1                ; 파티원 상태 화면이 열려 있는가
+StatWho     ds 1                ; 보고 있는 사람 번호 (0~5)
+StatRow     ds 1                ; 그리는 중인 줄 번호
+StatPtr     ds 2                ; 그 사람의 기록
+; 장비 루틴이 쓰는 이름 붙인 자리. push/pop 으로 돌리면 짝을 눈으로 세어야 해서
+; 이 프로젝트가 여러 번 당했다(MakePtr 주석 참고).
+GearWho     ds 1
+GearIdx     ds 1
+GearItem    ds 1
+GearSlot    ds 1
+GearTo      ds 1
+GearAmt     ds 1
+GearMax     ds 1
+GearAc      ds 1
+GearDcnt    ds 1
+GearDside   ds 1
+GearPty     ds 2
+GearTmp     ds 2
+StatPage    ds 1                ; 0 상태 / 1 무기 / 2 소지품 / 3 마법
+StatPages   ds 1                ; 이 사람의 쪽 수 (캐스터면 4)
+StatMode    ds 1                ; MODE_PAGE / CURSOR / ACTION / GIVE
+StatCur     ds 1                ; 목록에서 커서가 선 줄 (화면 기준)
+StatSel     ds 1                ; 동작 메뉴에서 고른 줄
+StatFilter  ds 1                ; 0 이면 소지품 쪽, 그 밖이면 무기 쪽
+StatIdx     ds 1                ; 훑는 중인 가방 칸
+StatShown   ds 1                ; 화면에 찍은 줄 수
+StatItem    ds 1                ; 그 자리의 품목 번호
+StatAct     ds 1                ; 동작 메뉴를 그리는 중인 줄
+StatDir     ds 1                ; 쪽 넘기는 방향
+StatNum     ds 1                ; 방금 눌린 숫자
+escKey      ds 1                ; 7 행의 ESC
+prevEsc     ds 1
+; SetLang 이 ldir 로 한꺼번에 채우므로 이 다섯은 **이 차례로 붙어 있어야** 한다.
+MsgTab      ds 2                ; 지금 말의 문자열 표
+MonNameTab  ds 2                ; 몬스터 이름
+SkillNameTab ds 2               ; 기술 이름
+ClassNameTab ds 2               ; 직업 이름
+RaceNameTab ds 2                ; 종족 이름
+WeaponNameTab ds 2              ; 무기 이름
+CharAdv     ds 1                ; 방금 찍은 글자의 폭 (영문 6 / 한글 8)
 AtkBonus    ds 1
 TgtAc       ds 1
 DmgCnt      ds 1
@@ -220,6 +268,9 @@ ExpandTbl   ds 16 * 4 / PXB     ; 니블 하나가 픽셀 넷. 4bpp 32, 8bpp 64 
 Party       ds PARTY_N * PARTY_STRIDE
 Monsters    ds MON_N * MON_STRIDE
 
+; 장비. 파티 기록(32 바이트)을 늘리지 않으려고 나란한 배열로 둔다.
+PartyGear   ds PARTY_N * GEAR_STRIDE
+
 ; 미니맵 한 행分 (questmap.asm). 맵 한 칸 = 3바이트.
 MiniMapRow  ds MAP_W * MINIMAP_CELL / PXB
 
@@ -280,6 +331,12 @@ Init:
     ld (hl), 0
     ldir
 
+    ; RAM 을 지운 **뒤에** 말을 고른다. MsgTab 이 0 이면 첫 메시지에서
+    ; 0 번지를 읽는다. 지금은 무조건 LANG_DEFAULT 로 시작하고, 고르는
+    ; 화면을 붙일 때 여기서 그 화면을 부르면 된다.
+    ld a, LANG_DEFAULT
+    call SetLang
+
     ; 예전에는 여기서 Vars(0xC000~0xC00E) 만 지웠다. BattleOn 같은 값은
     ; 0xC100 위쪽에 있어서 켤 때 그대로 쓰레기였다. openMSX + C-BIOS 는 RAM 이
     ; 0 으로 켜져서 우연히 돌아갔지만, blueMSX 나 실기처럼 다른 값으로 켜지는
@@ -303,6 +360,7 @@ Init:
     call RevealAround           ; 시작 자리 둘레는 처음부터 보인다
 
     call MakeParty
+    call StartParty             ; 처음 짐을 넣고 기본 장비를 차게 한다
     call DrawParty
     call MsgReset
 
@@ -1469,6 +1527,24 @@ ReadInput:
     cpl
     and 0x04                    ; bit2 = M
     ld (mKey), a
+
+    in a, (PPI_ROW)             ; 0 행 = 0 1 2 3 4 5 6 7
+    and 0xF0
+    or 0
+    out (PPI_ROW), a
+    in a, (PPI_COL)
+    cpl
+    and 0x7E                    ; bit1~6 = 숫자 1~6 (bit0 은 0, bit7 은 7)
+    ld (numKey), a
+
+    in a, (PPI_ROW)             ; 7 행 = F4 F5 ESC TAB STOP BS SELECT RET
+    and 0xF0
+    or 7
+    out (PPI_ROW), a
+    in a, (PPI_COL)
+    cpl
+    and 0x04                    ; bit2 = ESC
+    ld (escKey), a
     ret
 
 HandleInput:
@@ -1499,6 +1575,118 @@ HandleInput:
     call ToggleMap              ; 눌린 키 비트가 C 에 있으므로 반드시 지켜야 한다 -
     pop bc                      ; 안 그러면 M 을 누를 때 제멋대로 걷거나 돈다.
 .nomap:
+
+    ld a, (numKey)              ; 1~6 은 0 행이라 따로 새로 눌림을 본다
+    ld b, a
+    ld a, (prevNum)
+    cpl
+    and b
+    ld e, a
+    ld a, b
+    ld (prevNum), a
+
+    ld a, (escKey)              ; ESC 는 7 행
+    ld b, a
+    ld a, (prevEsc)
+    cpl
+    and b
+    ld d, a
+    ld a, b
+    ld (prevEsc), a
+
+    ld a, (BattleOn)            ; 전투 중에는 양피지가 전투 기록 차지다
+    or a
+    jr nz, .nostat
+
+    ld a, d                     ; --- ESC: 한 단계 물러난다 ---
+    or a
+    jr z, .noesc
+    ld a, (StatOn)
+    or a
+    jr z, .noesc
+    push bc
+    call StatEscape
+    pop bc
+    ret
+.noesc:
+
+    ld a, e                     ; --- 숫자 1~6 ---
+    or a
+    jr z, .nonum
+    ld d, 0
+.scan:
+    inc d
+    rrca
+    jr nc, .scan
+    ld a, d                     ; 고리가 bit k 에서 d = k+1 로 빠져나온다
+    sub 2                       ; bit1('1') -> 번호 0
+    push bc
+    call StatNumber             ; 전달 중이면 받는 사람, 아니면 볼 사람
+    pop bc
+    ret
+.nonum:
+
+    ld a, (StatOn)
+    or a
+    jr z, .nostat
+
+    ld a, (StatMode)            ; --- 화살표와 스페이스는 단계마다 뜻이 다르다 ---
+    or a
+    jr nz, .inlist
+
+    ld a, 0                     ; MODE_PAGE - 좌우 사람, 위아래 쪽
+    bit KEY_RIGHT, c
+    jr nz, .turnpage
+    inc a
+    bit KEY_LEFT, c
+    jr nz, .turnpage
+    ld a, 0
+    bit KEY_DOWN, c
+    jr nz, .flippage
+    inc a
+    bit KEY_UP, c
+    jr nz, .flippage
+    bit KEY_SPACE, c            ; 가방 쪽이면 커서를 세운다
+    jr z, .nostat
+    push bc
+    call StatEnterList
+    pop bc
+    ret
+.flippage:
+    push bc
+    call StatPageDelta
+    pop bc
+    ret                         ; **걷기로 흘려보내지 않는다**
+.turnpage:
+    push bc
+    call StatNext
+    pop bc
+    ret
+
+.inlist:                        ; MODE_CURSOR / ACTION - 화살표는 줄 고르기
+    ld a, 0
+    bit KEY_DOWN, c
+    jr nz, .movecur
+    bit KEY_RIGHT, c
+    jr nz, .movecur
+    inc a
+    bit KEY_UP, c
+    jr nz, .movecur
+    bit KEY_LEFT, c
+    jr nz, .movecur
+    bit KEY_SPACE, c
+    jr z, .nostat
+    push bc
+    call StatConfirm
+    pop bc
+    ret
+.movecur:
+    push bc
+    call StatMoveCursor
+    pop bc
+    ret
+
+.nostat:
 
     ld a, (BattleOn)            ; 전투 중에는 스페이스만 받는다
     or a
@@ -1646,6 +1834,8 @@ WriteVdpReg:
     ELSE
     include "src/questruledata.asm"
     ENDIF
+    include "src/questmsgdata.asm"
+    include "src/questgeardata.asm"
     include "src/questtext.asm"
     include "src/questmath.asm"
     include "src/questparty.asm"
@@ -1653,6 +1843,8 @@ WriteVdpReg:
     include "src/questmon.asm"
     include "src/questlevel.asm"
     include "src/questmap.asm"
+    include "src/questgear.asm"
+    include "src/queststat.asm"
     IFDEF SCREEN8
     include "src/quest8data.asm"
     ELSE

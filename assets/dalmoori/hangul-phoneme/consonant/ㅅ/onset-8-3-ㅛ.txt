@@ -1,0 +1,12 @@
+---
+for = ㅛ...
+not-for = ...4
+---
+. . . # . . . .
+. . # . # . . .
+# # . . . # # .
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

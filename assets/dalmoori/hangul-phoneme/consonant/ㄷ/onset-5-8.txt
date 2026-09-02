@@ -1,0 +1,12 @@
+---
+variant.ㅕ = middle
+not-for = ㅖ...
+---
+# # # # # x x x
+# . . . . x x x
+# . . . . x x x
+# . . . . x x x
+# . . . . x x x
+# # # # # x x x
+. . . . . x x x
+. . . . . x x x

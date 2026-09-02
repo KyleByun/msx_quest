@@ -103,13 +103,23 @@ HERO_BASE_AC = 12       # constants.py
 
 ABIL = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
 
-# 이름 만들기. 원본에는 이름 생성기가 없다 - 참고 화면의 MORILDRANE 같은 이름은
-# 원래 Bard's Tale 것이다. 그 분위기에 맞춰 음절을 짜 넣었다.
-NAME_HEAD = ["MOR", "KRO", "BLOOD", "PHAN", "FAS", "THAL", "GRIM", "VOR",
-             "ELD", "SHAR", "DUR", "GAL", "MAR", "ZOR", "BEL", "HAR"]
-NAME_MID = ["IL", "AN", "OR", "UL", "AR", "EN", "YR", ""]
-NAME_TAIL = ["DRANE", "LM", "WULF", "TYR", "HOR", "DUR", "GAR", "NIS",
-             "MOR", "RIK", "THAS", "VEN", "DAR", "LOK", "RETH", "SON"]
+# 이름 만들기. 원본에는 이름 생성기가 없다.
+#
+# 자음으로 시작하고 모음이 사이사이 들어가는 5~7 글자로 만든다 (godor, dalia 꼴).
+# 무늬(C = 자음, V = 모음)를 하나 고르고 그 길이만큼 글자를 뽑는 방식이라
+# **길이가 무늬로 정해진다** - 음절을 이어 붙이던 예전 방식은 3~12 글자로
+# 들쭉날쭉했다.
+NAME_CONS = "BDFGHKLMNPRSTVZ"     # 발음이 꼬이는 C J Q W X Y 는 뺐다
+NAME_VOWELS = "AEIOU"
+NAME_PATTERNS = [
+    "CVCVC",        # 5  godor, dalir
+    "CVCVV",        # 5  dalia
+    "CVVCVC",       # 6  gaidor
+    "CVCVCV",       # 6  dalira
+    "CVCVVC",       # 6  dalias
+    "CVCVCVC",      # 7  dalirok
+]
+NAME_PAT_W = max(len(p) for p in NAME_PATTERNS) + 1
 
 
 
@@ -408,16 +418,22 @@ def main():
         A(db_str(pad(m["name"], 11)))
     A("")
 
-    # ---- 이름 음절 ----
-    A("; --- 이름 음절. 원본에는 이름 생성기가 없어 새로 넣었다 ------------------")
-    for tag, arr, w in (("Head", NAME_HEAD, 5), ("Mid", NAME_MID, 2), ("Tail", NAME_TAIL, 5)):
-        to_const()
-        A("SYL_%s_N     equ %d" % (tag.upper(), len(arr)))
-        A("SYL_%s_W     equ %d" % (tag.upper(), w))
-        to_data()
-        A("Syl%s:" % tag)
-        for syl in arr:
-            A(db_str(pad(syl, w)) + "   ; %s" % (syl or "-"))
+    # ---- 이름 ----
+    A("; --- 이름. 자음/모음과 무늬. 무늬 길이가 곧 이름 길이(5~7)다 -----------")
+    to_const()
+    A("NAME_CONS_N  equ %d" % len(NAME_CONS))
+    A("NAME_VOW_N   equ %d" % len(NAME_VOWELS))
+    A("NAME_PAT_N   equ %d" % len(NAME_PATTERNS))
+    A("NAME_PAT_W   equ %d" % NAME_PAT_W)
+    to_data()
+    A("NameCons:")
+    A('    db "%s"' % NAME_CONS)
+    A("NameVow:")
+    A('    db "%s"' % NAME_VOWELS)
+    A("NamePat:")
+    for pat in NAME_PATTERNS:
+        A('    db "%s"%s, 0        ; %d 글자'
+          % (pat, ", 0" * (NAME_PAT_W - 1 - len(pat)), len(pat)))
     to_const()
     A("")
     A("HERO_BASE_HP equ %d" % HERO_BASE_HP)

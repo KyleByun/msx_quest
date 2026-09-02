@@ -1,0 +1,11 @@
+---
+not-for = [ㅏㅐㅑㅒㅓㅔㅕㅖ].[ㄹㄺㄻㄼㄽㄾㄿㅀㅄㅈㅊㅋㅌㅎ].
+---
+# # # # # x x x
+. . . . # x x x
+. . . . # x x x
+. . . . # x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

@@ -1,0 +1,11 @@
+---
+variant.ㅕ = middle
+---
+. # # # . x x x
+# # # # # x x x
+. . # . . x x x
+. # . # . x x x
+. # . # . x x x
+# . . . # x x x
+. . . . . x x x
+. . . . . x x x

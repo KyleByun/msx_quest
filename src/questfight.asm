@@ -234,12 +234,13 @@ RandomHero:
 ;-----------------------------------------------------------------------------
 ; 번호 없이 종류 이름만 (무리를 소개할 때 쓴다)
 MsgAddMonKind:
-    ld a, (MonKind)
-    call MonTypePtr
-    ld de, T_NAME
+    ld a, (MonKind)             ; 이름은 MonsterTable 이 아니라 말별 표에 있다
+    ld h, a
+    ld e, MONNAME_LEN
+    call Mult8
+    ld de, (MonNameTab)
     add hl, de
-    ld b, 6
-    jp MsgAddStrN
+    jp MsgAddStr                ; 이름 표는 0 으로 끝난다
 
 MsgAddMonName:
     push af
@@ -308,17 +309,19 @@ HeroAttack:
     jr z, .miss
     ld a, (CritFlag)
     or a
-    ld hl, TxtHit
+    ld a, MSG_HIT
     jr z, .word
-    ld hl, TxtCrit
+    ld a, MSG_CRIT
 .word:
+    call MsgText
     call MsgAddStr
     ld a, (TmpDmg)
     call MsgAddNum
     call MsgFlush
     jp DamageMonster
 .miss:
-    ld hl, TxtMiss
+    ld a, MSG_MISS
+    call MsgText
     call MsgAddStr
     jp MsgFlush
 
@@ -334,7 +337,8 @@ DamageMonster:
     ld (hl), 0                  ; 쓰러졌다
     ld a, (TmpType)
     call MsgAddMonName
-    ld hl, TxtDies
+    ld a, MSG_DIES
+    call MsgText
     call MsgAddStr
     jp MsgFlush
 .hurt:
@@ -397,17 +401,19 @@ MonAttack:
     jr z, .miss
     ld a, (CritFlag)
     or a
-    ld hl, TxtHit
+    ld a, MSG_HIT
     jr z, .word
-    ld hl, TxtCrit
+    ld a, MSG_CRIT
 .word:
+    call MsgText
     call MsgAddStr
     ld a, (TmpDmg)
     call MsgAddNum
     call MsgFlush
     jp DamageHero
 .miss:
-    ld hl, TxtMiss
+    ld a, MSG_MISS
+    call MsgText
     call MsgAddStr
     jp MsgFlush
 
@@ -425,7 +431,8 @@ DamageHero:
     ld hl, (TgtPtr)
     ld b, 6
     call MsgAddStrN
-    ld hl, TxtDown
+    ld a, MSG_DOWN
+    call MsgText
     call MsgAddStr
     jp MsgFlush
 .hurt:
@@ -454,7 +461,8 @@ DamageHero:
 ; 나빠진다. 빠른 쪽은 뒤쪽 바퀴에서 한 번 더 나오는 것으로 드러난다.
 ;-----------------------------------------------------------------------------
 BattleRound:
-    ld hl, TxtRound
+    ld a, MSG_ROUND
+    call MsgText
     call MsgAddStr
     ld a, (RoundNo)
     call MsgAddNum
@@ -552,14 +560,16 @@ BattleRound:
 
 .won:
     call MenuClear
-    ld hl, TxtWon
+    ld a, MSG_WON
+    call MsgText
     call MsgAddStr
     call MsgFlush
     call EndBattle
     jp DrawParty
 .lost:
     call MenuClear
-    ld hl, TxtLost
+    ld a, MSG_LOST
+    call MsgText
     call MsgAddStr
     call MsgFlush
     call EndBattle
@@ -671,10 +681,11 @@ MenuDraw:
     ld a, (MenuIdx)             ; 고른 줄이면 화살표
     ld hl, MenuSel
     cp (hl)
-    ld hl, TxtMenuOn
+    ld a, MSG_MENU_ON
     jr z, .mark
-    ld hl, TxtMenuOff
+    ld a, MSG_MENU_OFF
 .mark:
+    call MsgText
     call PutStr
     ld a, (MenuIdx)
     call CmdName
@@ -690,16 +701,12 @@ MenuDraw:
 CmdName:
     cp 3
     jr z, .skill
-    add a, a
     ld l, a
     ld h, 0
-    ld de, CmdNames
+    ld de, CmdNames             ; 이제 메시지 번호 한 바이트씩이다
     add hl, de
     ld a, (hl)
-    inc hl
-    ld h, (hl)
-    ld l, a
-    ret
+    jp MsgText
 .skill:
     ld a, (MenuHero)
     call PartyPtr
@@ -707,23 +714,15 @@ CmdName:
     add hl, de
     ld a, (hl)
     ld h, a
-    ld e, SKILL_STRIDE
+    ld e, SKILLNAME_LEN
     call Mult8
-    ld de, ClassSkill + SK_NAME
+    ld de, (SkillNameTab)
     add hl, de
     ret
 
 CmdNames:
-    dw TxtCmdAtk, TxtCmdDef, TxtCmdFlee
+    db MSG_CMD_ATTACK, MSG_CMD_DEFEND, MSG_CMD_FLEE
 
-TxtMenuOn:  db ">", 0
-TxtMenuOff: db " ", 0
-TxtCmdAtk:  db "ATTACK", 0
-TxtCmdDef:  db "DEFEND", 0
-TxtCmdFlee: db "FLEE", 0
-TxtGuard:   db " GUARDS", 0
-TxtFled:    db "PARTY FLEES", 0
-TxtNoFlee:  db " CANNOT FLEE", 0
 
 ;-----------------------------------------------------------------------------
 ; 고른 명령을 실행한다. A = 명령 번호. 누가 하는지는 AskCommand 가 MenuHero 에
@@ -762,7 +761,8 @@ DoCommand:
     call PartyPtr
     ld b, NAME_LEN
     call MsgAddStrN
-    ld hl, TxtSurge
+    ld a, MSG_SURGES
+    call MsgText
     call MsgAddStr
     jp MsgFlush
 .attack2:
@@ -785,7 +785,8 @@ DoCommand:
     call PartyPtr
     ld b, NAME_LEN
     call MsgAddStrN
-    ld hl, TxtGuard
+    ld a, MSG_GUARDS
+    call MsgText
     call MsgAddStr
     jp MsgFlush
 
@@ -803,7 +804,8 @@ DoCommand:
     add a, c
     cp 12
     jr c, .noflee
-    ld hl, TxtFled
+    ld a, MSG_FLED
+    call MsgText
     call MsgAddStr
     call MsgFlush
     call EndBattle
@@ -815,11 +817,11 @@ DoCommand:
     call PartyPtr
     ld b, NAME_LEN
     call MsgAddStrN
-    ld hl, TxtNoFlee
+    ld a, MSG_NO_FLEE
+    call MsgText
     call MsgAddStr
     jp MsgFlush
 
-TxtSurge:   db " SURGES", 0
 
 ; AtkMode 에 따라 이번 한 방의 값을 손본다. ClassSkill 표의 효과 번호와 같다.
 ;
@@ -1002,11 +1004,13 @@ StartBattle:
 
     ld a, (MonCount)            ; "3 GOBLIN" 처럼
     call MsgAddNum
-    ld hl, TxtSpace
+    ld a, MSG_SPACE
+    call MsgText
     call MsgAddStr
     call MsgAddMonKind
     call MsgFlush
-    ld hl, TxtAppear
+    ld a, MSG_APPEAR
+    call MsgText
     call MsgAddStr
     call MsgFlush
 
@@ -1014,16 +1018,6 @@ StartBattle:
     ld (needDraw), a            ; 몬스터 그림을 얹는다
     ret
 
-TxtSpace:   db " ", 0
-TxtAppear:  db "BLOCKS THE WAY", 0
-TxtRound:   db "ROUND ", 0
-TxtHit:     db " HIT ", 0
-TxtCrit:    db " CRIT ", 0
-TxtMiss:    db " MISS", 0
-TxtDies:    db " DIES", 0
-TxtDown:    db " DOWN", 0
-TxtWon:     db "VICTORY", 0
-TxtLost:    db "PARTY IS LOST", 0
 
 ;-----------------------------------------------------------------------------
 ; 걸어 다니다 마주치기

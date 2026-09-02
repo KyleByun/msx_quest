@@ -1,0 +1,12 @@
+---
+not-for = ...4
+variant.ㅞ = compact
+---
+. # . # . x x x
+. # . # . x x x
+# . # . # x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

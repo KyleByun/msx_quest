@@ -1,0 +1,12 @@
+---
+for = ㅞ...
+not-for = ㅢ...
+---
+# # # # x x x x
+. . # # x x x x
+# # . . x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

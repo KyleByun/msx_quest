@@ -1,0 +1,13 @@
+---
+variant.ㅐ = right
+variant.ㅒ = right
+variant.ㅖ = compact
+---
+# # # # x x x x
+# . # . x x x x
+# . # . x x x x
+# # # # x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x
+x x x x x x x x

@@ -506,48 +506,75 @@ MakeName:
     pop hl
     ld (NamePtr), hl
 
-    ld hl, SylHead
-    ld c, SYL_HEAD_N
-    ld b, SYL_HEAD_W
-    call AddSyllable
-    ld hl, SylMid
-    ld c, SYL_MID_N
-    ld b, SYL_MID_W
-    call AddSyllable
-    ld hl, SylTail
-    ld c, SYL_TAIL_N
-    ld b, SYL_TAIL_W
-    call AddSyllable
-    ret
-
-; HL = 음절 표, C = 개수, B = 한 칸 길이. 하나 골라 이름 뒤에 붙인다.
-AddSyllable:
-    push hl
-    push bc
-    call RandMod                ; A = 0 ~ C-1
-    pop bc
-    pop hl
-    ld e, b                     ; 한 칸 길이만큼 곱한다
-    ld d, 0
-.mul:
-    or a
-    jr z, .got
+    ; 무늬를 하나 고른다. C = 자음 자리, V = 모음 자리이고 무늬 길이가 곧
+    ; 이름 길이(5~7)다. 음절을 이어 붙이던 예전 방식은 3~12 글자로 들쭉날쭉했다.
+    ld c, NAME_PAT_N
+    call RandMod
+    ld h, a
+    ld e, NAME_PAT_W
+    call Mult8
+    ld de, NamePat
     add hl, de
-    dec a
-    jr .mul
-.got:
-    ld de, (NamePtr)
-.copy:
+    ld (NamePatPtr), hl
+    xor a
+    ld (NamePrev), a
+
+.next:
+    ld hl, (NamePatPtr)
     ld a, (hl)
-    cp ' '
-    jr z, .skip                 ; 채움 공백은 버린다
-    ld (de), a
-    inc de
-.skip:
+    or a
+    ret z                       ; 무늬 끝
     inc hl
-    djnz .copy
-    ld (NamePtr), de
-    ret
+    ld (NamePatPtr), hl
+
+    cp 'V'
+    jr z, .vowel
+    ld c, NAME_CONS_N
+    call RandMod
+    ld (NameIdx), a
+    ld hl, NameCons
+    ld c, NAME_CONS_N
+    jr .pick
+.vowel:
+    ld c, NAME_VOW_N
+    call RandMod
+    ld (NameIdx), a
+    ld hl, NameVow
+    ld c, NAME_VOW_N
+
+.pick:
+    ; HL = 표, C = 개수. 앞 글자와 같으면 표의 **다음 것으로 한 번만** 옮긴다.
+    ; 무늬에 모음이 잇달아 오는 자리가 있어서(CVCVV) 그대로 두면 AA 가 나온다.
+    ; 표 안에 같은 글자가 둘 없으므로 한 번이면 반드시 달라진다.
+    ld a, (NameIdx)
+    ld e, a
+    ld d, 0
+    push hl
+    add hl, de
+    ld a, (hl)
+    pop hl
+    ld d, a
+    ld a, (NamePrev)
+    cp d
+    jr nz, .got
+    ld a, (NameIdx)
+    inc a
+    cp c
+    jr c, .again
+    xor a
+.again:
+    ld e, a
+    ld d, 0
+    add hl, de
+    ld d, (hl)
+.got:
+    ld a, d
+    ld (NamePrev), a
+    ld hl, (NamePtr)
+    ld (hl), a
+    inc hl
+    ld (NamePtr), hl
+    jr .next
 
 
 ;-----------------------------------------------------------------------------

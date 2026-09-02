@@ -1,0 +1,11 @@
+---
+variant.ㅖ = up
+---
+# # # # x x x x
+# . . . x x x x
+# # # # x x x x
+# . . . x x x x
+# . . . x x x x
+# # # # x x x x
+. . . . x x x x
+. . . . x x x x

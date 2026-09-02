@@ -1,0 +1,470 @@
+{
+  "_note": [
+    "게임에 나오는 글을 한 곳에 모은 것. 이 파일을 고치고 다시 빌드하면 롬에 반영된다.",
+    "gfx/quest_msg.py 가 읽어서 src/questmsgdata.asm 을 굽는다.",
+    "",
+    "한글은 달무리 8x8 글꼴로 빌드할 때 미리 조합해 굽는다(assets/dalmoori, Apache 2.0).",
+    "쓰는 글자만 굽기 때문에 여기 없는 글자는 롬에 들어가지 않는다.",
+    "",
+    "폭 규칙 - 영문 한 칸 6픽셀, 한글 한 칸 8픽셀.",
+    "  ko 가 en 보다 넓으면 빌드가 멈춘다. 오른쪽 양피지 한 줄이 102픽셀(영문 17칸)뿐이고,",
+    "  이름이 앞에 붙는 줄은 영문만으로도 이미 그 폭에 가깝기 때문이다.",
+    "  slot 이 있는 것은 롬의 고정 칸이라 바이트 수도 그 안에 들어가야 한다",
+    "  (한글 한 글자 = 1바이트)."
+  ],
+  "config": {
+    "latin_adv": 6,
+    "hangul_adv": 8,
+    "msg_px": 102,
+    "menu_px": 54,
+    "default_lang": "ko"
+  },
+  "ui": {
+    "_note": "src/questfight.asm 의 Txt* 문자열. 앞에 공백이 있는 것은 이름 뒤에 붙는 말이다.",
+    "cmd_attack": {
+      "en": "ATTACK",
+      "ko": "공격",
+      "note": "명령 메뉴"
+    },
+    "cmd_defend": {
+      "en": "DEFEND",
+      "ko": "방어",
+      "note": "명령 메뉴"
+    },
+    "cmd_flee": {
+      "en": "FLEE",
+      "ko": "도망",
+      "note": "명령 메뉴"
+    },
+    "round": {
+      "en": "ROUND ",
+      "ko": "라운드 ",
+      "note": "뒤에 숫자가 붙는다"
+    },
+    "appear": {
+      "en": "BLOCKS THE WAY",
+      "ko": "길을 막는다",
+      "note": "몬스터를 만났을 때"
+    },
+    "hit": {
+      "en": " HIT ",
+      "ko": " 명중 ",
+      "after_name": true,
+      "note": "뒤에 피해 숫자"
+    },
+    "crit": {
+      "en": " CRIT ",
+      "ko": " 치명타 ",
+      "after_name": true,
+      "note": "뒤에 피해 숫자"
+    },
+    "miss": {
+      "en": " MISS",
+      "ko": " 빗나감",
+      "after_name": true
+    },
+    "dies": {
+      "en": " DIES",
+      "ko": " 사망",
+      "after_name": true,
+      "note": "몬스터가 쓰러짐"
+    },
+    "down": {
+      "en": " DOWN",
+      "ko": " 쓰러짐",
+      "after_name": true,
+      "note": "우리 편이 쓰러짐"
+    },
+    "guards": {
+      "en": " GUARDS",
+      "ko": " 방어",
+      "after_name": true
+    },
+    "surges": {
+      "en": " SURGES",
+      "ko": " 연속공격",
+      "after_name": true,
+      "note": "전사의 SURGE"
+    },
+    "no_flee": {
+      "en": " CANNOT FLEE",
+      "ko": " 도주 실패",
+      "after_name": true
+    },
+    "fled": {
+      "en": "PARTY FLEES",
+      "ko": "파티 도주"
+    },
+    "won": {
+      "en": "VICTORY",
+      "ko": "승리"
+    },
+    "lost": {
+      "en": "PARTY IS LOST",
+      "ko": "파티 전멸"
+    }
+  },
+  "symbols": {
+    "_note": "글이 아니라 기호다. 어느 말로 하든 그대로 둔다.",
+    "menu_on": {
+      "en": ">",
+      "ko": ">"
+    },
+    "menu_off": {
+      "en": " ",
+      "ko": " "
+    },
+    "space": {
+      "en": " ",
+      "ko": " "
+    }
+  },
+  "monsters": {
+    "_note": "MonsterTable 의 이름 칸. slot 11바이트. 뒤에 무리 번호(1~4)가 붙는다.",
+    "_slot": 11,
+    "GOBLIN": {
+      "en": "GOBLIN",
+      "ko": "고블린"
+    },
+    "SLIME": {
+      "en": "SLIME",
+      "ko": "슬라임"
+    },
+    "DWARF": {
+      "en": "DWARF",
+      "ko": "드워프"
+    },
+    "TROLL": {
+      "en": "TROLL",
+      "ko": "트롤"
+    },
+    "COBRA": {
+      "en": "COBRA",
+      "ko": "코브라"
+    },
+    "MIMIC": {
+      "en": "MIMIC",
+      "ko": "미믹"
+    }
+  },
+  "classes": {
+    "_note": "ClassTable 의 이름 칸. slot 10바이트.",
+    "_slot": 10,
+    "FIGHTER": {
+      "en": "FIGHTER",
+      "ko": "전사"
+    },
+    "ROGUE": {
+      "en": "ROGUE",
+      "ko": "도적"
+    },
+    "WIZARD": {
+      "en": "WIZARD",
+      "ko": "마법사"
+    },
+    "CLERIC": {
+      "en": "CLERIC",
+      "ko": "성직자"
+    },
+    "MUSA": {
+      "en": "MUSA",
+      "ko": "무사"
+    }
+  },
+  "class_abbrev": {
+    "_note": [
+      "하단 파티 줄의 CL 칸. slot 2바이트.",
+      "**일부러 영문 그대로 둔다.** 그 줄의 머리글(CHARACTER AC HIT PTS SPL PTS CL)이",
+      "배경 그림에 박혀 있어서 글자만 한글로 바꾸면 머리글과 어긋난다.",
+      "배경을 말별로 다시 구우면 그때 여기도 바꾸면 된다."
+    ],
+    "_slot": 2,
+    "_translate": false,
+    "FIGHTER": {
+      "en": "FI",
+      "ko": "FI"
+    },
+    "ROGUE": {
+      "en": "RO",
+      "ko": "RO"
+    },
+    "WIZARD": {
+      "en": "WI",
+      "ko": "WI"
+    },
+    "CLERIC": {
+      "en": "CL",
+      "ko": "CL"
+    },
+    "MUSA": {
+      "en": "MU",
+      "ko": "MU"
+    }
+  },
+  "skills": {
+    "_note": "ClassSkill 의 이름 칸. slot 9바이트. 명령 메뉴 넷째 자리에 나온다.",
+    "_slot": 9,
+    "SURGE": {
+      "en": "SURGE",
+      "ko": "연속",
+      "note": "전사 - 한 번 더 움직인다"
+    },
+    "SNEAK": {
+      "en": "SNEAK",
+      "ko": "기습",
+      "note": "도적 - 피해 주사위 +1"
+    },
+    "BOLT": {
+      "en": "BOLT",
+      "ko": "마법탄",
+      "note": "마법사 - 지능으로 때린다"
+    },
+    "SMITE": {
+      "en": "SMITE",
+      "ko": "신성",
+      "note": "성직자 - 신성 피해 +4"
+    },
+    "KI": {
+      "en": "KI",
+      "ko": "기력",
+      "note": "무사 - 주사위 +2, 명중 -2"
+    }
+  },
+  "lang_select": {
+    "_note": [
+      "시작할 때 고르는 화면. 지금은 config.default_lang 으로 바로 시작하고",
+      "이 글만 롬에 넣어 둔다. 고르는 화면을 붙일 때 그대로 쓴다."
+    ],
+    "title": {
+      "en": "SELECT LANGUAGE",
+      "ko": "말 고르기"
+    },
+    "opt_ko": {
+      "en": "KOREAN",
+      "ko": "한국어"
+    },
+    "opt_en": {
+      "en": "ENGLISH",
+      "ko": "영어"
+    }
+  },
+  "races": {
+    "_note": "RaceTable 의 이름 칸. slot 8바이트. 파티원 상태 화면에 나온다.",
+    "_slot": 8,
+    "HUMAN": {
+      "en": "HUMAN",
+      "ko": "인간"
+    },
+    "DWARF": {
+      "en": "DWARF",
+      "ko": "드워프"
+    },
+    "ELF": {
+      "en": "ELF",
+      "ko": "엘프"
+    },
+    "GNOME": {
+      "en": "GNOME",
+      "ko": "노움"
+    },
+    "HALF-ELF": {
+      "en": "HALF-ELF",
+      "ko": "하프엘프"
+    },
+    "HALF-ORC": {
+      "en": "HALF-ORC",
+      "ko": "하프오크"
+    },
+    "HALFLING": {
+      "en": "HALFLING",
+      "ko": "하플링"
+    }
+  },
+  "stats": {
+    "_note": "파티원 상태 화면의 항목 이름. 두 칸씩 짝지어 놓으므로 짧아야 한다.",
+    "st_str": {
+      "en": "STR",
+      "ko": "근력"
+    },
+    "st_dex": {
+      "en": "DEX",
+      "ko": "민첩"
+    },
+    "st_con": {
+      "en": "CON",
+      "ko": "건강"
+    },
+    "st_int": {
+      "en": "INT",
+      "ko": "지능"
+    },
+    "st_wis": {
+      "en": "WIS",
+      "ko": "지혜"
+    },
+    "st_cha": {
+      "en": "CHA",
+      "ko": "매력"
+    },
+    "st_hp": {
+      "en": "HP",
+      "ko": "HP"
+    },
+    "st_mp": {
+      "en": "SPL",
+      "ko": "MP"
+    },
+    "st_ac": {
+      "en": "AC",
+      "ko": "방어"
+    },
+    "st_atk": {
+      "en": "ATK",
+      "ko": "공격"
+    },
+    "st_dmg": {
+      "en": "DMG",
+      "ko": "피해"
+    },
+    "st_lv": {
+      "en": "LV",
+      "ko": "LV"
+    },
+    "st_skill": {
+      "en": "SKILL",
+      "ko": "기술"
+    },
+    "st_items": {
+      "en": "ITEMS",
+      "ko": "소지품"
+    },
+    "st_none": {
+      "en": "NONE",
+      "ko": "없음"
+    },
+    "st_weapon": {
+      "en": "WEAPON",
+      "ko": "무기"
+    },
+    "st_shield": {
+      "en": "SHIELD",
+      "ko": "방패"
+    },
+    "st_magic": {
+      "en": "MAGIC",
+      "ko": "마법"
+    },
+    "st_equip": {
+      "en": "EQUIP",
+      "ko": "장비"
+    },
+    "st_yes": {
+      "en": "YES",
+      "ko": "있음"
+    },
+    "st_equipcmd": {
+      "en": "EQUIP",
+      "ko": "장착"
+    },
+    "st_usecmd": {
+      "en": "USE",
+      "ko": "사용"
+    },
+    "st_give": {
+      "en": "GIVE",
+      "ko": "전달"
+    },
+    "st_drop": {
+      "en": "DROP",
+      "ko": "버리기"
+    },
+    "st_towho": {
+      "en": "TO WHO 1-6",
+      "ko": "누구에게 1-6"
+    },
+    "st_empty": {
+      "en": "EMPTY",
+      "ko": "비었음"
+    }
+  },
+  "weapons": {
+    "_note": "품목 이름. 차례와 수치는 gfx/quest_gear.py 의 ITEMS 가 정한다. slot 12바이트.",
+    "_slot": 12,
+    "DAGGER": {
+      "en": "DAGGER",
+      "ko": "단검"
+    },
+    "SHORTSWORD": {
+      "en": "SHORTSWD",
+      "ko": "숏소드"
+    },
+    "LONGSWORD": {
+      "en": "LONGSWORD",
+      "ko": "롱소드"
+    },
+    "GREATSWORD": {
+      "en": "GREATSWD",
+      "ko": "대검"
+    },
+    "MACE": {
+      "en": "MACE",
+      "ko": "철퇴"
+    },
+    "WARHAMMER": {
+      "en": "WARHAMMER",
+      "ko": "워해머"
+    },
+    "STAFF": {
+      "en": "STAFF",
+      "ko": "지팡이"
+    },
+    "HWANDO": {
+      "en": "HWANDO",
+      "ko": "환도"
+    },
+    "GUKGUNG": {
+      "en": "GUKGUNG",
+      "ko": "국궁"
+    },
+    "LONGBOW": {
+      "en": "LONGBOW",
+      "ko": "롱보우"
+    },
+    "LIGHT_XBOW": {
+      "en": "XBOW",
+      "ko": "석궁"
+    },
+    "HAND_XBOW": {
+      "en": "HANDXBOW",
+      "ko": "손석궁"
+    },
+    "SHIELD": {
+      "en": "SHIELD",
+      "ko": "방패"
+    },
+    "LEATHER": {
+      "en": "LEATHER",
+      "ko": "가죽갑옷"
+    },
+    "CHAINMAIL": {
+      "en": "CHAINMAIL",
+      "ko": "사슬갑옷"
+    },
+    "HELMET": {
+      "en": "HELMET",
+      "ko": "투구"
+    },
+    "POTION_HP": {
+      "en": "HP POTION",
+      "ko": "치유물약"
+    },
+    "POTION_MP": {
+      "en": "MP POTION",
+      "ko": "마나물약"
+    },
+    "PORTAL": {
+      "en": "TOWN PORTAL",
+      "ko": "타운포털"
+    }
+  }
+}
