@@ -1,0 +1,110 @@
+{
+  "_note": [
+    "몬스터 구성표 - **여기가 정본이다.** 손으로 고치면 그대로 롬에 들어간다.",
+    "",
+    "예전에는 D:/my/python/dnd 의 monster_stats.py 에서 매 빌드마다 끌어왔고",
+    "gfx/quest_rules.json 은 그 캐시였다. 그래서 손으로 고쳐도 다음 빌드에 덮였다.",
+    "지금은 이 파일이 정본이고 dnd 는 **처음 씨앗을 뽑는 도구**다.",
+    "",
+    "  uv run python gfx/quest_rules.py --seed-monsters",
+    "",
+    "그러면 dnd 에서 다시 뽑아 이 파일을 덮어쓴다. 손으로 맞춘 값이 날아가므로",
+    "새 몬스터를 들일 때만 쓰고, 평소에는 이 파일을 바로 고친다.",
+    "",
+    "  ac/hp/str/dex  전투 판정에 쓰는 값. 0~255.",
+    "  dice           피해 주사위 [개수, 면]",
+    "  group_max      한 번에 몇 마리까지 나오는가 (1~MON_N).",
+    "                 약한 것은 떼로, 트롤 같은 것은 하나만.",
+    "  img            gfx/sprites/ 의 그림 파일",
+    "  dnd_src        --seed-monsters 가 볼 원본 이름. 게임에는 안 쓴다.",
+    "",
+    "**차례가 곧 몬스터 번호다.** 이름(한/영)은 gfx/message.json 의 monsters",
+    "묶음에 있고, 여기 'key' 가 그쪽 열쇠와 같아야 한다."
+  ],
+  "monsters": [
+    {
+      "key": "GOBLIN",
+      "img": "02_goblin.png",
+      "ac": 15,
+      "hp": 7,
+      "str": 8,
+      "dex": 14,
+      "dice": [
+        1,
+        6
+      ],
+      "group_max": 4,
+      "dnd_src": "Goblin"
+    },
+    {
+      "key": "SLIME",
+      "img": "03_slime.png",
+      "ac": 8,
+      "hp": 45,
+      "str": 15,
+      "dex": 6,
+      "dice": [
+        1,
+        6
+      ],
+      "group_max": 1,
+      "dnd_src": "Ochre Jelly"
+    },
+    {
+      "key": "DWARF",
+      "img": "04_dwarf.png",
+      "ac": 16,
+      "hp": 11,
+      "str": 13,
+      "dex": 12,
+      "dice": [
+        1,
+        6
+      ],
+      "group_max": 4,
+      "dnd_src": "Guard"
+    },
+    {
+      "key": "TROLL",
+      "img": "06_troll.png",
+      "ac": 15,
+      "hp": 84,
+      "str": 18,
+      "dex": 13,
+      "dice": [
+        1,
+        6
+      ],
+      "group_max": 1,
+      "dnd_src": "Troll"
+    },
+    {
+      "key": "COBRA",
+      "img": "23_cobra.png",
+      "ac": 14,
+      "hp": 11,
+      "str": 10,
+      "dex": 18,
+      "dice": [
+        1,
+        6
+      ],
+      "group_max": 4,
+      "dnd_src": "Giant Poisonous Snake"
+    },
+    {
+      "key": "MIMIC",
+      "img": "41_mimic.png",
+      "ac": 14,
+      "hp": 52,
+      "str": 11,
+      "dex": 18,
+      "dice": [
+        1,
+        6
+      ],
+      "group_max": 1,
+      "dnd_src": "Doppelganger"
+    }
+  ]
+}

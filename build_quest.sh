@@ -20,11 +20,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 mkdir -p build
 
-# 게임에 나오는 글을 굽는다. gfx/message.json 을 고치면 여기서 롬에 반영된다.
-# 한글은 달무리 8x8 을 빌드할 때 미리 조합한다(assets/dalmoori, Apache 2.0).
-# 폭이 양피지 창을 넘으면 여기서 빌드가 멈춘다.
-# 윈도우에서 .ps1 로 빌드한다면 이 단계를 그쪽에도 넣어야 한다.
+# 손으로 고치는 자료를 롬 표로 굽는다. 셋 다 1 초 안에 끝난다.
+#
+#   gfx/message.json  게임에 나오는 글 (한글은 달무리 8x8 을 여기서 조합한다)
+#   gfx/items.json    무기/방어구/소모품 한 표
+#   gfx/monster.json  몬스터 수치
+#
+# 값이 어긋나면 (양피지 폭을 넘거나, 한 바이트에 안 들어가거나, 없는 열쇠를
+# 가리키거나) **여기서 빌드가 멈춘다.** SCREEN 8 에는 픽셀 오라클이 없어서,
+# 안 막으면 화면을 눈으로 보다가 한참 뒤에 발견하게 된다.
+#
+# 벽면 픽셀(quest_convert.py)은 몇 분 걸리므로 여기 없다. 기하나 텍스처를
+# 고쳤을 때만 손으로 돌린다.
 python3 gfx/quest_msg.py
+python3 gfx/quest_gear.py
+python3 gfx/quest_rules.py
 
 "$SJASMPLUS" --msg=war --sym="build/quest.sym" --lst="build/quest.lst" "src/quest.asm"
 

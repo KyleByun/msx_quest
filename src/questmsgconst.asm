@@ -2,8 +2,10 @@
 ; 글을 고치려면 gfx/message.json 을 고치고 다시 빌드하세요.
 
 HAN_BASE     equ 0x5B                ; 이 값 이상이면 한글 글리프 번호다
+HAN_ESC_BYTE equ 0xFF                ; 이 바이트는 안 찍는다 - 다음 글자에 얹는다
+HAN_ESC      equ 164               ; 탈출한 글자의 번호는 여기서부터
 HANGUL_ADV   equ 8                 ; 한글 한 칸 (영문은 FONT_W = 6)
-HAN_N        equ 130                ; 구워 넣은 한글 글자 수
+HAN_N        equ 180                ; 구워 넣은 한글 글자 수
 MSG_N        equ 45
 LANG_EN      equ 0
 LANG_KO      equ 1

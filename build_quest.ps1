@@ -17,6 +17,26 @@ Push-Location $PSScriptRoot
 try {
     New-Item -ItemType Directory -Force "$PSScriptRoot\build" | Out-Null
 
+    # 손으로 고치는 자료를 롬 표로 굽는다. 셋 다 1 초 안에 끝난다.
+    #
+    #   gfx/message.json  게임에 나오는 글 (한글은 달무리 8x8 을 여기서 조합한다)
+    #   gfx/items.json    무기/방어구/소모품 한 표
+    #   gfx/monster.json  몬스터 수치
+    #
+    # 값이 어긋나면 (양피지 폭을 넘거나, 한 바이트에 안 들어가거나, 없는 열쇠를
+    # 가리키거나) **여기서 빌드가 멈춘다.** SCREEN 8 에는 픽셀 오라클이 없어서,
+    # 안 막으면 화면을 눈으로 보다가 한참 뒤에 발견하게 된다.
+    #
+    # 벽면 픽셀(quest_convert.py)은 몇 분 걸리므로 여기 없다. 기하나 텍스처를
+    # 고쳤을 때만 손으로 돌린다.
+    foreach ($g in @(@('quest_msg.py'), @('quest_gear.py'), @('quest_rules.py'))) {
+        # $g | Select-Object -Skip 1 을 쓴다. $g[1..($n-1)] 은 인자가 없을 때
+        # 1..0 이 되어 PowerShell 이 범위를 **뒤집으므로**, 스크립트 이름이
+        # 자기 자신의 인자로 딸려 들어간다.
+        & uv run --with pillow python "$PSScriptRoot\gfx\$($g[0])" @($g | Select-Object -Skip 1)
+        if ($LASTEXITCODE -ne 0) { throw "$($g[0]) 실패" }
+    }
+
     & $SJASMPLUS --msg=war --sym="build/quest.sym" --lst="build/quest.lst" "src/quest.asm"
     if ($LASTEXITCODE -ne 0) { throw "sjasmplus failed with exit code $LASTEXITCODE" }
 

@@ -1,4 +1,21 @@
-"""D&D 규칙 자료를 D:/my/python/dnd 에서 가져와 asm 표로 굽는다.
+"""D&D 규칙 자료를 asm 표로 굽는다.
+
+정본이 둘로 나뉘어 있다.
+
+  종족 / 직업 / BAB   D:/my/python/dnd (진짜 D&D 규칙). 원본이 없으면
+                      gfx/quest_rules.json 에 남겨 둔 값을 쓴다.
+  몬스터 수치         **gfx/monster.json**. 손으로 고치는 정본이다.
+
+몬스터를 옮긴 이유: AC/HP/민첩은 D&D 충실도가 아니라 이 게임의 균형이고,
+무리 크기와 그림 자리는 애초에 D&D 에 없는 값이다. 예전에는 dnd 에서 매 빌드마다
+끌어와 quest_rules.json 에 캐시했는데, 그래서 손으로 고쳐도 다음 빌드에 덮였다.
+
+  uv run python gfx/quest_rules.py --seed-monsters
+
+로 dnd 에서 다시 뽑을 수 있다(monster.json 을 덮는다). 새 몬스터를 들일 때만 쓴다.
+
+원래 머리말:
+
 
 가져오는 것
   race_job.py      RACE_DATA, CLASS_DATA, calc_base_attack_bonus
@@ -43,6 +60,7 @@ MON_N = 5           # battlefield.py 가 다섯 마리를 뽑는다
 #   TROLL       Troll                     정확
 #   COBRA       Giant Poisonous Snake     정확
 #   MIMIC       Doppelganger              변장해서 덮치는 것
+# 씨앗을 뽑을 때만 쓴다 (--seed-monsters). 게임 수치의 정본은 gfx/monster.json 이다.
 MONSTER_POOL = [
     ("GOBLIN", "Goblin", "02_goblin.png"),
     ("SLIME", "Ochre Jelly", "03_slime.png"),
@@ -143,21 +161,8 @@ def load_rules():
                 ],
                 "bab": {p: [race_job.calc_base_attack_bonus(l, p) for l in range(0, 21)]
                         for p in ("good", "average", "poor")},
-                "monsters": [],
             }
-            for shown, src, img in MONSTER_POOL:
-                st = monster_stats.MONSTER_STATS[src]
-                cnt, sides = MON_DAMAGE.get(src, MON_DEFAULT_DAMAGE)
-                hp = st["hp"]
-                # 무리 크기. Bard`s Tale 처럼 약한 것은 떼로, 센 것은 하나만
-                # 나오게 한다. 트롤(84) 이 셋 나오면 스무 라운드가 걸린다.
-                grp = max(1, min(4, 60 // max(1, hp)))
-                data["monsters"].append({"name": shown, "src": src, "img": img,
-                                         "ac": st["ac"], "hp": hp,
-                                         "str": st["strength"],
-                                         "dex": st["dexterity"], "dcnt": cnt,
-                                         "dside": sides, "grp": grp})
-            with io.open(SNAPSHOT, "w", encoding="utf-8") as f:
+            with io.open(SNAPSHOT, "w", encoding="utf-8", newline="\n") as f:
                 json.dump(data, f, ensure_ascii=False, indent=1)
             print("규칙을 %s 에서 가져왔다" % DND)
             return data
@@ -165,6 +170,70 @@ def load_rules():
             sys.path.pop(0)
     print("원본이 없어 %s 를 쓴다" % SNAPSHOT)
     return json.load(io.open(SNAPSHOT, encoding="utf-8"))
+
+
+MONSTERS_JSON = os.path.join(HERE, "monster.json")
+
+
+def seed_monsters():
+    """dnd 에서 몬스터 수치를 다시 뽑아 gfx/monster.json 을 덮어쓴다.
+
+    **평소에는 부르지 않는다.** monster.json 이 정본이라, 손으로 맞춰 둔 값이
+    여기서 날아간다. 새 몬스터를 들일 때만 쓰고 그 뒤에 손으로 다듬는다.
+    """
+    if not os.path.isdir(DND):
+        sys.exit("원본이 없습니다: %s" % DND)
+    sys.path.insert(0, DND)
+    try:
+        import monster_stats
+    finally:
+        sys.path.pop(0)
+    out = []
+    for shown, src, img in MONSTER_POOL:
+        st = monster_stats.MONSTER_STATS[src]
+        cnt, sides = MON_DAMAGE.get(src, MON_DEFAULT_DAMAGE)
+        hp = st["hp"]
+        # 무리 크기. Bard`s Tale 처럼 약한 것은 떼로, 센 것은 하나만 나오게
+        # 한다. 트롤(84) 이 셋 나오면 스무 라운드가 걸린다.
+        out.append({"key": shown, "img": img, "ac": st["ac"], "hp": hp,
+                    "str": st["strength"], "dex": st["dexterity"],
+                    "dice": [cnt, sides],
+                    "group_max": max(1, min(4, 60 // max(1, hp))),
+                    "dnd_src": src})
+    doc = json.load(io.open(MONSTERS_JSON, encoding="utf-8"))
+    doc["monsters"] = out
+    with io.open(MONSTERS_JSON, "w", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
+    print("%s 에서 몬스터 %d 종을 다시 뽑아 %s 를 덮었습니다."
+          % (DND, len(out), MONSTERS_JSON))
+
+
+def load_monsters():
+    """gfx/monster.json 이 정본이다. 수치가 바이트에 들어가는지 여기서 막는다."""
+    doc = json.load(io.open(MONSTERS_JSON, encoding="utf-8"))
+    mons, bad, seen = [], [], set()
+    for n, m in enumerate(doc["monsters"]):
+        key = m.get("key", "(이름 없음 %d 번째)" % n)
+        if key in seen:
+            bad.append("몬스터 열쇠 %s 가 두 번 나온다" % key)
+        seen.add(key)
+        cnt, sides = m.get("dice", [0, 0])
+        vals = [("ac", m.get("ac")), ("hp", m.get("hp")), ("str", m.get("str")),
+                ("dex", m.get("dex")), ("dice 개수", cnt), ("dice 면", sides),
+                ("group_max", m.get("group_max"))]
+        for label, v in vals:
+            if not isinstance(v, int) or not 0 <= v <= 255:
+                bad.append("%s 의 %s 가 %r 이다. 한 바이트에 들어가야 한다."
+                           % (key, label, v))
+        if not os.path.exists(os.path.join(HERE, "sprites", m.get("img", ""))):
+            bad.append("%s 의 그림 %r 이 gfx/sprites/ 에 없다" % (key, m.get("img")))
+        mons.append({"name": key, "img": m["img"], "src": m.get("dnd_src", "?"),
+                     "ac": m["ac"], "hp": m["hp"],
+                     "str": m["str"], "dex": m["dex"],
+                     "dcnt": cnt, "dside": sides, "grp": m["group_max"]})
+    if bad:
+        sys.exit("gfx/monster.json 이 어긋났습니다:\n  " + "\n  ".join(bad))
+    return mons
 
 
 def abil_mod(score):
@@ -224,6 +293,8 @@ PRE = "quest"
 def main():
     R = load_rules()
     import quest_font as F
+
+    R["monsters"] = load_monsters()      # 정본은 gfx/monster.json
 
     L = []                  # 상수 - quest.asm 맨 앞에서 include
     D = []                  # 표 - ROM 데이터 자리에서 include
@@ -391,7 +462,7 @@ def main():
     A("")
 
     # ---- 몬스터표 ----
-    A("; --- 몬스터 (battlefield.py monster_pool + monster_stats.py) ------------")
+    A("; --- 몬스터. 수치를 고치려면 gfx/monster.json 을 고치세요. -------------")
     A("; AC, HP, 힘, 피해 개수/면, 무리 최대, 민첩, 그림, 이름 11")
     to_const()
     A("MONSTER_N    equ %d" % len(R["monsters"]))
@@ -409,7 +480,7 @@ def main():
     to_data()
     A("MonsterTable:")
     for i, m in enumerate(R["monsters"]):
-        A("    ; %-6s  <- monster_stats.py %s" % (m["name"], m.get("src", m["name"])))
+        A("    ; %-6s  <- monster.json (dnd 원본 %s)" % (m["name"], m.get("src", "?")))
         A("    db %d, %d, %d, %d, %d, %d, %d" % (m["ac"], min(255, m["hp"]), m["str"],
                                                  m["dcnt"], m["dside"], m["grp"],
                                                  m["dex"]))
@@ -469,6 +540,10 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--seed-monsters" in sys.argv:
+        # 정본을 dnd 에서 다시 뽑아 gfx/monster.json 을 덮는다. 평소에는 안 쓴다.
+        seed_monsters()
+        sys.exit(0)
     if "--bpp" in sys.argv and sys.argv[sys.argv.index("--bpp") + 1] == "8":
         BPP, SPR_SIZE, PRE = 8, 96, "quest8"
     main()

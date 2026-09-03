@@ -343,6 +343,9 @@ BANK_WIN = 0xA000
 def bank_file(pre, kind, i, blob, note):
     """8KB 뱅크 하나를 감싸는 .asm 을 낸다. 뱅크 수가 모드와 자료 크기에 따라
     달라지므로 손으로 관리하지 않는다 - 한 번만 어긋나도 롬이 통째로 엉킨다."""
+    # 번호에 0 을 채운다. 안 채우면 빌드 스크립트의 글자순 정렬이
+    # 0,1,10,11,12,2,3.. 으로 붙여서 뱅크가 통째로 뒤섞인다. 실제로 타이틀
+    # 그림이 13 뱅크가 되면서 밟았다.
     L = ["; gfx/quest_convert.py 가 생성한 파일입니다. 직접 고치지 마세요.",
          ";",
          "; %s (%d 바이트)" % (note, len(blob)),
@@ -353,9 +356,9 @@ def bank_file(pre, kind, i, blob, note):
          db("", list(blob)),
          "",
          "    ds 0x%04X - $, 0xFF" % (BANK_WIN + BANK_SIZE),
-         '    SAVEBIN "build/%s%s%d.bin", 0x%04X, 0x%04X'
+         '    SAVEBIN "build/%s%s%02d.bin", 0x%04X, 0x%04X'
          % (pre, kind, i, BANK_WIN, BANK_SIZE)]
-    open(os.path.join(ROOT, "src", "%s%s%d.asm" % (pre, kind, i)), "w",
+    open(os.path.join(ROOT, "src", "%s%s%02d.asm" % (pre, kind, i)), "w",
          encoding="utf-8").write("\n".join(L) + "\n")
 
 

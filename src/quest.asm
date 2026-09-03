@@ -126,6 +126,7 @@ VarsEnd:
 TextX       ds 1
 TextY       ds 1
 TextFg      ds 1
+HanEsc      ds 1                ; 탈출 바이트를 막 봤나 (PutChar 참고)
 TextBg      ds 1
 NumBuf      ds 5                ; 숫자를 오른쪽부터 채운다
 NumBufEnd   ds 1                ; PutNumR 이 길이를 재는 기준

@@ -1,0 +1,116 @@
+{
+  "_note": [
+    "타이틀 화면 - 어떤 그림을 어떤 차례로 보여주고 아래에 무슨 말을 띄울지.",
+    "",
+    "**빌드에 --title 을 주었을 때만 롬에 들어간다.** 안 주면 그림도 코드도 아예",
+    "안 들어가고 부팅하면 바로 게임이다(테스트할 때 매번 넘기지 않으려고).",
+    "",
+    "  .\\build_quest3.ps1 --title      타이틀 있음. 롬이 256KB 가 된다.",
+    "  .\\build_quest3.ps1              타이틀 없음. 128KB.",
+    "",
+    "그림이 왜 롬을 키우나: 256x144 짜리 넉 장이 RLE 로 11 뱅크쯤 된다. 디더링된",
+    "픽셀 아트라 런이 짧아서 색을 줄여도 별로 안 준다(8색으로 줄여도 10 뱅크).",
+    "지금 게임이 14 뱅크를 쓰므로 128KB(16 뱅크) 에는 안 들어간다. ASCII8 은 뱅크",
+    "번호가 8 비트라 2MB 까지 되고, 256KB 는 openMSX 에서 확인했다.",
+    "",
+    "config",
+    "  image_h    그림이 차지하는 줄 수. 나머지 아래쪽이 글 자리다.",
+    "             원본이 거의 2:1 이라 136~144 가 비율에 맞는다.",
+    "  text_y     첫 글 줄의 화면 y",
+    "  line_h     글 줄 간격",
+    "  hold       그림 하나를 그리고 나서 저절로 넘어갈 때까지의 프레임 수",
+    "             (0 이면 키를 누를 때까지 기다린다). 어느 쪽이든 키를 누르면",
+    "             바로 넘어가고, 마지막 장을 넘기면 게임이 시작된다.",
+    "  type_delay 글자 하나를 찍고 다음 글자까지 기다리는 프레임 수.",
+    "             2 면 초당 30 자쯤이다. 0 이면 한 번에 다 찍는다.",
+    "             찍는 중에 키를 누르면 남은 글자가 한 번에 나온다.",
+    "",
+    "screens",
+    "  img        gfx/sprites/ 의 파일 이름 (.png 없이)",
+    "  lines      아래에 띄울 글. 한 줄씩 ko/en 짝으로.",
+    "             폭이 화면을 넘으면 빌드가 멈춘다.",
+    "",
+    "글에 쓴 한글은 quest_msg.py 가 message.json 것과 함께 폰트에 구워 넣는다.",
+    "여기 있는 글자가 폰트에 없어서 안 나오는 일은 없다.",
+    "",
+    "영문은 폰트가 0x20~0x5A ('Z' 까지) 라 **소문자를 못 쓴다.** 한글 줄에 라틴",
+    "글자를 섞을 때도 마찬가지다 - 소문자가 있으면 빌드가 멈춘다."
+  ],
+  "config": {
+    "image_h": 144,
+    "text_y": 152,
+    "line_h": 10,
+    "hold": 0,
+    "type_delay": 2
+  },
+  "screens": [
+    {
+      "img": "title_logo",
+      "lines": [
+        {
+          "ko": "디아블로 제로",
+          "en": "DIABLO ZERO"
+        },
+        {
+          "ko": "                        2026년 9월 1일",
+          "en": "                        2026 / 9 / 1"
+        },
+        {
+          "ko": "                        KYLE BYUN",
+          "en": "                        KYLE BYUN"
+        },
+        {
+          "ko": "       아무 키나 누르세요",
+          "en": "       PRESS ANY KEY"
+        }
+      ]
+    },
+    {
+      "img": "title_summon",
+      "lines": [
+        {
+          "ko": "거대한 심연이 열리고 6명의 남녀가 그곳으로 빨려 들었다 ",
+          "en": "A GREAT ABYSS OPENED AND TOOK SIX IN."
+        },
+        {
+          "ko": "정신을 차리고 나니 왕이 그 앞에 내려보고 있었다",
+          "en": "THEY WOKE TO A KING LOOKING DOWN."
+        }
+      ]
+    },
+    {
+      "img": "title_king",
+      "lines": [
+        {
+          "ko": "너희들은 DIABLO를 처치하기 위해서 ",
+          "en": "YOU ARE HEROES FROM ANOTHER WORLD,"
+        },
+        {
+          "ko": "이세계에서 온 용사들이다",
+          "en": "CALLED HERE TO SLAY DIABLO."
+        },
+        {
+          "ko": "지하 던전으로 내려가서 그 악마를 물리쳐라",
+          "en": "GO DOWN TO THE DUNGEON AND END HIM."
+        }
+      ]
+    },
+    {
+      "img": "title_cave",
+      "lines": [
+        {
+          "ko": "달이 낮게 걸린 밤,",
+          "en": "UNDER A LOW MOON,"
+        },
+        {
+          "ko": "던전 앞에는 아무런 소리도 들리지 않았다",
+          "en": "NOT A SOUND BEFORE THE DUNGEON."
+        },
+        {
+          "ko": "6 용사들은 서로를 의지하며 동굴로 들어갔다",
+          "en": "THE SIX WENT IN, TRUSTING EACH OTHER."
+        }
+      ]
+    }
+  ]
+}

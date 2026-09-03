@@ -111,12 +111,39 @@ TextAddr:
 ; 둘 다 8x8 1bpp 비트맵이라 아래 찍는 고리는 그대로 함께 쓴다 - 다른 것은
 ; 비트맵을 어디서 가져오는가와 몇 픽셀 나아가는가 둘뿐이다.
 PutChar:
+    ; 한글이 165 자를 넘어 **탈출 바이트**를 쓴다. 0xFF 는 그 자체로는 아무것도
+    ; 안 찍고 걸쇠만 세우고, 다음 글자의 번호에 HAN_ESC 를 얹는다.
+    ;
+    ; 여기서 푸는 이유: 문자열을 훑는 자리가 PutStr / PutStrN / MsgAddStr /
+    ; TypeStr 넷이다. 거기마다 두 바이트를 다루게 하면 반드시 한 군데를
+    ; 빠뜨린다. 걸쇠로 하면 부르는 쪽은 하나도 안 고쳐도 된다.
+    ld hl, HanEsc
+    ld c, (hl)
+    ld (hl), 0                  ; 걸쇠는 한 번만 듣는다
+    ld l, a                     ; 글자를 잠시 L 에
+    ld a, c
+    or a
+    ld a, l
+    jr nz, .han2                ; 이 바이트는 탈출한 글자의 나머지 번호다
+
+    cp HAN_ESC_BYTE
+    jr nz, .try
+    ld (HanEsc), a              ; 표시만 남긴다. 안 찍고 자리도 안 옮긴다.
+    ret
+.try:
     cp HAN_BASE
     jr c, .latin
 
     sub HAN_BASE                ; 한글 - 번호 * 8 + HanFont
     ld l, a
     ld h, 0
+    jr .hanmul
+.han2:
+    ld l, a                     ; 번호 = HAN_ESC + 이 바이트 (8 비트를 넘는다)
+    ld h, 0
+    ld de, HAN_ESC
+    add hl, de
+.hanmul:
     add hl, hl
     add hl, hl
     add hl, hl

@@ -47,6 +47,10 @@
     IFDEF SCREEN8
     include "src/quest8rules.asm"
     include "src/quest8const.asm"
+    IFDEF TITLE
+    include "src/quest8titleconst.asm"
+    include "src/quest8musicconst.asm"
+    ENDIF
     ELSE
     include "src/questrules.asm"
     include "src/questconst.asm"
@@ -133,6 +137,7 @@ VarsEnd:
 TextX       ds 1
 TextY       ds 1
 TextFg      ds 1
+HanEsc      ds 1                ; 탈출 바이트를 막 봤나 (PutChar 참고)
 TextBg      ds 1
 NumBuf      ds 5                ; 숫자를 오른쪽부터 채운다
 NumBufEnd   ds 1                ; PutNumR 이 길이를 재는 기준
@@ -242,6 +247,26 @@ MenuIdx     ds 1                ; 메뉴를 그리는 동안의 줄 번호
 AtkMode     ds 1                ; 이번 한 방에만 걸리는 특수 효과 (0 이면 보통)
 FleeDone    ds 1                ; 도망에 성공했으면 남은 차례를 멈춘다
 StepCount   ds 1                ; 마주치기 판정용 걸음 수
+
+    IFDEF TITLE
+; 타이틀 화면용 (--title 빌드에만 있다)
+titleNo     ds 1                ; 지금 몇 번째 장인가
+titleBank   ds 1                ; 그림을 읽고 있는 뱅크
+titleLine   ds 1
+titleRows   ds 1
+titleY      ds 1
+titleRun    ds 1                ; 이번 RLE 레코드가 쓴 바이트 수
+titleSkip   ds 1                ; 찍는 중에 키를 눌렀나 (남은 글자를 한 번에)
+
+; PSG 음악. 채널마다 (지금 읽는 자리, 남은 프레임).
+MusPtr0     ds 2
+MusPtr1     ds 2
+MusPtr2     ds 2
+MusLeft0    ds 1
+MusLeft1    ds 1
+MusLeft2    ds 1
+MusVol      ds 1
+    ENDIF
 
 ; 지도 표시
 MapOn       ds 1                ; 0=양피지, 그 외=미니맵
@@ -361,6 +386,20 @@ Init:
     ld a, 0x40                  ; 화면 켜기 (스프라이트는 쓰지 않는다)
     ld c, 1
     call WriteVdpReg
+
+    IFDEF TITLE
+    ; 타이틀은 화면을 통째로 쓰므로 배경을 덮는다. 끝나면 다시 푼다.
+    ; 여기(RAM 을 지우고 SetLang 을 부른 뒤)여야 한다 - 타이틀도 RAM 변수와
+    ; 말 표를 쓴다.
+    call ShowTitle
+    xor a                       ; 배경을 다시 푸는 동안 화면을 끈다
+    ld c, 1
+    call WriteVdpReg
+    call UnpackBg
+    ld a, 0x40
+    ld c, 1
+    call WriteVdpReg
+    ENDIF
 
     call SeedRng                ; RTC + R 레지스터로 시드를 만들고
     call MakeLevel              ; NetHack 식으로 방과 통로를 파 놓는다
@@ -1850,6 +1889,11 @@ WriteVdpReg:
     include "src/questmon.asm"
     include "src/questlevel.asm"
     include "src/questmap.asm"
+    IFDEF TITLE
+    include "src/questtitle.asm"
+    include "src/questpsg.asm"
+    include "src/quest8titledata.asm"
+    ENDIF
     include "src/questgear.asm"
     include "src/queststat.asm"
     IFDEF SCREEN8

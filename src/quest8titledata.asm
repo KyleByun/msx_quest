@@ -1,0 +1,101 @@
+; gfx/quest_title.py 가 생성한 파일입니다. 직접 고치지 마세요.
+
+; --- 화면마다: 시작 뱅크, 그 뱅크 안의 주소, RLE 길이 -------------
+; 한 장이 8KB 를 넘으므로 푸는 쪽이 0xC000 에 닿으면 다음 뱅크로 넘어간다.
+TitleImg:
+    db TITLE_BANK0 + 0
+    dw 0xA000
+    dw 23271          ; title_logo (푼 뒤 36864 바이트)
+    db TITLE_BANK0 + 2
+    dw 0xBAE7
+    dw 30797          ; title_summon (푼 뒤 36864 바이트)
+    db TITLE_BANK0 + 6
+    dw 0xB334
+    dw 28578          ; title_king (푼 뒤 36864 바이트)
+    db TITLE_BANK0 + 10
+    dw 0xA2D6
+    dw 17736          ; title_cave (푼 뒤 36864 바이트)
+
+; --- 화면마다 글 몇 줄째부터 몇 줄 -------------------------------
+TitleLine:
+    db 0, 4
+    db 4, 2
+    db 6, 3
+    db 9, 3
+
+TitleTextPtrEN:
+    dw TitleTextEN_0
+    dw TitleTextEN_1
+    dw TitleTextEN_2
+    dw TitleTextEN_3
+    dw TitleTextEN_4
+    dw TitleTextEN_5
+    dw TitleTextEN_6
+    dw TitleTextEN_7
+    dw TitleTextEN_8
+    dw TitleTextEN_9
+    dw TitleTextEN_10
+    dw TitleTextEN_11
+TitleTextEN_0:
+    db "DIABLO ZERO", 0x00, 0
+TitleTextEN_1:
+    db "                        2026 / 9 / 1", 0x00, 0
+TitleTextEN_2:
+    db "                        KYLE BYUN", 0x00, 0
+TitleTextEN_3:
+    db "       PRESS ANY KEY", 0x00, 0
+TitleTextEN_4:
+    db "A GREAT ABYSS OPENED AND TOOK SIX IN.", 0x00, 0
+TitleTextEN_5:
+    db "THEY WOKE TO A KING LOOKING DOWN.", 0x00, 0
+TitleTextEN_6:
+    db "YOU ARE HEROES FROM ANOTHER WORLD,", 0x00, 0
+TitleTextEN_7:
+    db "CALLED HERE TO SLAY DIABLO.", 0x00, 0
+TitleTextEN_8:
+    db "GO DOWN TO THE DUNGEON AND END HIM.", 0x00, 0
+TitleTextEN_9:
+    db "UNDER A LOW MOON,", 0x00, 0
+TitleTextEN_10:
+    db "NOT A SOUND BEFORE THE DUNGEON.", 0x00, 0
+TitleTextEN_11:
+    db "THE SIX WENT IN, TRUSTING EACH OTHER.", 0x00, 0
+
+TitleTextPtrKO:
+    dw TitleTextKO_0
+    dw TitleTextKO_1
+    dw TitleTextKO_2
+    dw TitleTextKO_3
+    dw TitleTextKO_4
+    dw TitleTextKO_5
+    dw TitleTextKO_6
+    dw TitleTextKO_7
+    dw TitleTextKO_8
+    dw TitleTextKO_9
+    dw TitleTextKO_10
+    dw TitleTextKO_11
+TitleTextKO_0:
+    db 0x88, 0xBF, 0xAA, 0x8E, " ", 0xE9, 0x8E, 0x00, 0
+TitleTextKO_1:
+    db "                        2026", 0x79, " 9", 0xD7, " 1", 0xE1, 0x00, 0
+TitleTextKO_2:
+    db "                        KYLE BYUN", 0x00, 0
+TitleTextKO_3:
+    db "       ", 0xBF, 0x9F, " ", 0xF9, 0x73, " ", 0x7B, 0x91, 0xB2, 0xD1, 0x00, 0
+TitleTextKO_4:
+    db 0x61, 0x82, 0xFF, 0x0B, " ", 0xBD, 0xCA, 0xDF, " ", 0xCB, 0x93, 0x68, " 6", 0x9E, 0xDE, " ", 0x74, 0x78, 0x5B, " ", 0x6F, 0x69, 0xDA, 0x8E, " ", 0xAD, 0x8C, " ", 0x87, 0xC7, 0x7F, " ", 0x00, 0
+TitleTextKO_5:
+    db 0xE8, 0xBB, 0xDC, " ", 0xF0, 0x93, 0x68, " ", 0x73, 0x7E, " ", 0xD0, 0xDF, " ", 0x6F, " ", 0xC3, 0xC8, " ", 0x76, 0x8C, 0xA8, 0x68, " ", 0xE3, 0xC7, 0x7F, 0x00, 0
+TitleTextKO_6:
+    db 0x77, 0xFF, 0x0F, 0x87, 0xDB, " DIABLO", 0x92, " ", 0xF2, 0xF6, 0xFF, 0x0A, 0x71, " ", 0xD8, 0xFF, 0x0C, 0xAF, " ", 0x00, 0
+TitleTextKO_7:
+    db 0xDF, 0xB2, 0x67, 0xC8, 0xAF, " ", 0xCE, " ", 0xD2, 0xAE, 0x87, 0xDF, 0x7F, 0x00, 0
+TitleTextKO_8:
+    db 0xED, 0xFF, 0x0A, " ", 0x83, 0xE7, 0xDA, 0x8E, " ", 0x76, 0x8C, 0x5B, 0xAF, " ", 0x6F, " ", 0xC0, 0x96, 0x92, " ", 0xA0, 0x93, 0xF5, 0x89, 0x00, 0
+TitleTextKO_9:
+    db 0x81, 0xDF, " ", 0x75, 0x65, " ", 0x63, 0x94, " ", 0xA4, ",", 0x00, 0
+TitleTextKO_10:
+    db 0x83, 0xE7, " ", 0xC3, 0xC8, 0x7C, " ", 0xBF, 0x9F, 0x8B, " ", 0xB3, 0x93, 0x84, " ", 0x87, 0x93, 0xED, " ", 0xC1, 0xC2, 0x7F, 0x00, 0
+TitleTextKO_11:
+    db "6 ", 0xD2, 0xAE, 0x87, 0xDB, " ", 0xAF, 0x8E, 0x92, " ", 0xDE, 0xED, 0xFF, 0x0A, 0x9C, " ", 0x85, 0x6D, 0x8E, " ", 0x87, 0xC5, 0x5F, 0x7F, 0x00, 0
+

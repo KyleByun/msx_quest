@@ -214,4 +214,4 @@
     db 0x87, 0xB6
 
     ds 0xC000 - $, 0xFF
-    SAVEBIN "build/quest8bgbank0.bin", 0xA000, 0x2000
+    SAVEBIN "build/quest8bgbank00.bin", 0xA000, 0x2000

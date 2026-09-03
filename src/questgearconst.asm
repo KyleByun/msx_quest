@@ -1,5 +1,5 @@
 ; gfx/quest_gear.py 가 생성한 파일입니다. 직접 고치지 마세요.
-; 수치는 quest_sena.md 에서 왔습니다.
+; 수치를 고치려면 gfx/items.json 을 고치세요.
 
 ITEM_N       equ 19
 ITEM_STRIDE  equ 4

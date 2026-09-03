@@ -17,6 +17,7 @@ message.json 에 없는 글자는 롬에 들어가지 않는다.
 넓으면 빌드를 세운다 - 안 그러면 화면을 눈으로 보다가 한 줄씩 발견하게 되고,
 SCREEN 8 에는 픽셀 단위 오라클이 없다.
 """
+import io
 import json
 import os
 import sys
@@ -36,7 +37,12 @@ GLYPHS = os.path.join(ROOT, "assets", "dalmoori")
 # 0x80 부터 썼는데 그러면 128 자가 상한이고, 품목 이름을 넣다가 실제로 130 자에서
 # 걸렸다. 0x5B 로 내리면 165 자가 되고, 한 칸이 한 바이트인 것은 그대로다.
 HAN_BASE = 0x5B
-HAN_MAX = 0x100 - HAN_BASE       # 165 자까지. 넘으면 탈출 바이트가 필요해진다
+# 0xFF 는 탈출 바이트다. 한 바이트로 담는 것은 0x5B~0xFE 의 164 자이고, 그보다
+# 뒤 글자는 0xFF 다음에 (번호 - 164) 를 한 바이트 더 붙인다. 해독은 PutChar 이
+# 걸쇠 하나로 한다 - 문자열을 훑는 자리가 넷이라 거기서 다루면 하나를 빠뜨린다.
+HAN_ESC_BYTE = 0xFF
+HAN_ESC = HAN_ESC_BYTE - HAN_BASE       # 164 - 한 바이트로 담기는 글자 수
+HAN_MAX = HAN_ESC + 256                 # 420 자까지
 
 LANGS = ("en", "ko")
 
@@ -64,8 +70,12 @@ def collect(doc):
             yield group, key, val
 
 
-def check(doc, cfg):
-    """폭과 칸 크기를 본다. 어긋나면 전부 모아서 한 번에 알린다."""
+def check(doc, cfg, index):
+    """폭과 칸 크기를 본다. 어긋나면 전부 모아서 한 번에 알린다.
+
+    칸 크기는 **글자 수가 아니라 바이트 수**로 본다. 탈출 바이트가 붙으면 한
+    글자가 두 바이트가 되므로, 글자 수로 세면 칸을 넘겨 놓고도 통과한다.
+    """
     bad = []
     for group, key, val in collect(doc):
         en, ko = val["en"], val["ko"]
@@ -74,7 +84,7 @@ def check(doc, cfg):
         # 고정 칸에 들어가는 것은 바이트 수가 칸을 넘으면 안 된다.
         if slot is not None:
             for lang in LANGS:
-                n = len(val[lang])
+                n = len(encode(val[lang], index))
                 if n > slot:
                     bad.append("%s.%s [%s] %r 이 %d바이트다 (칸이 %d)"
                                % (group, key, lang, val[lang], n, slot))
@@ -100,7 +110,12 @@ def encode(s, index):
     out = bytearray()
     for ch in s:
         if is_han(ch):
-            out.append(HAN_BASE + index[ch])
+            n = index[ch]
+            if n < HAN_ESC:
+                out.append(HAN_BASE + n)
+            else:
+                out.append(HAN_ESC_BYTE)    # 탈출 - 다음 바이트가 나머지 번호
+                out.append(n - HAN_ESC)
         elif 0x20 <= ord(ch) < HAN_BASE:
             out.append(ord(ch))
         else:
@@ -131,25 +146,52 @@ def db_str(data):
     return "    db " + ", ".join(parts) + ", 0"
 
 
+TITLE_JSON = os.path.join(HERE, "title.json")
+
+
+def title_strings():
+    """title.json 의 글. 없으면 빈 목록.
+
+    타이틀은 --title 을 준 빌드에만 들어가지만, **폰트는 늘 여기 것까지 굽는다.**
+    빌드 갈래마다 폰트가 달라지면 같은 글자가 다른 번호를 갖게 되고, 그러면
+    타이틀 있는 롬과 없는 롬에서 questmsgdata.asm 이 서로 안 맞는다. 몇 글자
+    더 굽는 값(글자당 8 바이트)이 그 혼란보다 싸다.
+    """
+    if not os.path.exists(TITLE_JSON):
+        return []
+    doc = json.load(io.open(TITLE_JSON, encoding="utf-8"))
+    return [ln[lang] for sc in doc["screens"] for ln in sc["lines"]
+            for lang in LANGS]
+
+
+def font_index():
+    """글자 -> 글리프 번호. 굽는 쪽과 쓰는 쪽이 같은 표를 봐야 한다."""
+    doc = json.load(io.open(JSON, encoding="utf-8"))
+    chars = {c for _g, _k, v in collect(doc) for lang in LANGS
+             for c in v[lang] if is_han(c)}
+    chars |= {c for s in title_strings() for c in s if is_han(c)}
+    return {c: i for i, c in enumerate(sorted(chars))}
+
+
 def main():
-    doc = json.load(open(JSON, encoding="utf-8"))
+    doc = json.load(io.open(JSON, encoding="utf-8"))
     cfg = doc["config"]
 
-    bad = check(doc, cfg)
+    bad = check(doc, cfg, font_index())
     if bad:
         sys.exit("message.json 이 화면에 안 들어갑니다:\n  " + "\n  ".join(bad))
 
     # --- 쓰는 한글만 모아 굽는다 ---------------------------------------------
-    chars = sorted({c for _g, _k, v in collect(doc)
-                    for lang in LANGS for c in v[lang] if is_han(c)})
+    # title.json 것도 함께 굽는다 (font_index 참고).
+    chars = sorted(font_index())
     if len(chars) > HAN_MAX:
-        sys.exit("한글이 %d자다. 한 바이트로 담을 수 있는 것은 %d자뿐이다.\n"
-                 "  message.json 의 글을 줄이거나 탈출 바이트를 넣어야 한다."
+        sys.exit("한글이 %d자다. 탈출 바이트를 써도 %d자까지뿐이다.\n"
+                 "  message.json 과 title.json 의 글을 줄여야 한다."
                  % (len(chars), HAN_MAX))
 
     font = dalmoori.Font(GLYPHS)
     bitmaps = [font.glyph(c) for c in chars]
-    index = {c: i for i, c in enumerate(chars)}
+    index = font_index()
 
     # --- 상수 (equ 뿐이라 ORG 앞에서 include 한다) ----------------------------
     ui = entries(doc["ui"]) | entries(doc["symbols"]) | entries(doc["stats"])
@@ -158,6 +200,8 @@ def main():
          "; 글을 고치려면 gfx/message.json 을 고치고 다시 빌드하세요.",
          "",
          "HAN_BASE     equ 0x%02X                ; 이 값 이상이면 한글 글리프 번호다" % HAN_BASE,
+         "HAN_ESC_BYTE equ 0x%02X                ; 이 바이트는 안 찍는다 - 다음 글자에 얹는다" % HAN_ESC_BYTE,
+         "HAN_ESC      equ %d               ; 탈출한 글자의 번호는 여기서부터" % HAN_ESC,
          "HANGUL_ADV   equ %d                 ; 한글 한 칸 (영문은 FONT_W = 6)" % cfg["hangul_adv"],
          "HAN_N        equ %d                ; 구워 넣은 한글 글자 수" % len(chars),
          "MSG_N        equ %d" % len(ids),
@@ -197,13 +241,16 @@ def main():
     # 이 둘은 quest_rules.py 가 굽는 표 안에 이름이 박혀 있었다. 말을 바꾸려면
     # 이름만 따로 있어야 해서 여기로 옮긴다. 차례는 quest_rules.py 의 차례와
     # 같아야 하므로 그쪽 목록을 그대로 적어 둔다.
+    # 몬스터와 무기는 **정본에서 읽는다.** 여기 또 적으면 한쪽만 고쳤을 때
+    # 이름과 수치가 어긋난다 - 몬스터 차례는 실제로 손으로 베껴 두고 있었다.
+    import quest_rules
     ORDER = {
-        "monsters": ["GOBLIN", "SLIME", "DWARF", "TROLL", "COBRA", "MIMIC"],
+        "monsters": [m["name"] for m in quest_rules.load_monsters()],
         "skills": ["SURGE", "SNEAK", "BOLT", "SMITE", "KI"],
         "classes": ["FIGHTER", "ROGUE", "WIZARD", "CLERIC", "MUSA"],
         "races": ["HUMAN", "DWARF", "ELF", "GNOME",
                   "HALF-ELF", "HALF-ORC", "HALFLING"],
-        # 무기는 차례가 곧 번호다. quest_gear.py 가 정본 - 여기 또 적으면 어긋난다.
+        # 무기는 차례가 곧 번호다. gfx/items.json 이 정본이다.
         "weapons": [it[0] for it in quest_gear.ITEMS],
     }
     LABEL = {"monsters": "MonName", "skills": "SkillName",
@@ -228,10 +275,12 @@ def main():
                 D.append(db_str(b + bytes(slot - len(b))))
             D.append("")
 
+    # newline="\n" 을 준다. 안 주면 윈도우에서 CRLF 로 나가서, 빌드가 생성기를
+    # 돌릴 때마다 내용이 같은데도 git 에 바뀐 것으로 잡힌다.
     open(os.path.join(ROOT, "src", "questmsgconst.asm"), "w",
-         encoding="utf-8").write("\n".join(C) + "\n")
+         encoding="utf-8", newline="\n").write("\n".join(C) + "\n")
     open(os.path.join(ROOT, "src", "questmsgdata.asm"), "w",
-         encoding="utf-8").write("\n".join(D) + "\n")
+         encoding="utf-8", newline="\n").write("\n".join(D) + "\n")
 
     size = len(chars) * 8 + sum(len(encode(ui[k][l], index)) + 1
                                 for l in LANGS for k in ids) + 2 * 2 * len(ids)

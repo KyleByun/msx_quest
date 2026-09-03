@@ -1,0 +1,220 @@
+{
+  "_note": [
+    "무기·방어구·소모품을 담은 **한** 표. 롬에도 표가 하나뿐이고(ItemTable)",
+    "'slot' 이 무엇을 어디에 차는지 정한다. 파일을 무기/아이템으로 나누지 않는 이유는",
+    "품목 번호가 가방(G_INV)에 그대로 들어가서, 합치는 순서가 곧 번호가 되기 때문이다.",
+    "",
+    "**차례가 곧 품목 번호다.** 가운데에 끼워 넣으면 뒤의 번호가 전부 밀린다.",
+    "새 품목은 되도록 끝에 붙인다.",
+    "",
+    "이름(한글/영문)은 gfx/message.json 의 weapons 묶음에 있다. 여기 'key' 가 그쪽",
+    "열쇠와 같아야 하고, 빠지면 빌드가 멈춘다.",
+    "",
+    "무기   dice   [개수, 면]",
+    "방어구 ac     AC 보너스",
+    "소모품 amount 효과 크기 / effect  none|hp|mp",
+    "two_handed 가 참이면 방패를 함께 못 든다."
+  ],
+  "config": {
+    "inv_n": 10,
+    "gear_stride": 16,
+    "start_extra": [
+      "LEATHER",
+      "POTION_HP"
+    ]
+  },
+  "items": [
+    {
+      "key": "DAGGER",
+      "slot": "weapon",
+      "dice": [
+        1,
+        4
+      ]
+    },
+    {
+      "key": "SHORTSWORD",
+      "slot": "weapon",
+      "dice": [
+        1,
+        6
+      ]
+    },
+    {
+      "key": "LONGSWORD",
+      "slot": "weapon",
+      "dice": [
+        1,
+        8
+      ]
+    },
+    {
+      "key": "GREATSWORD",
+      "slot": "weapon",
+      "dice": [
+        2,
+        6
+      ],
+      "two_handed": true
+    },
+    {
+      "key": "MACE",
+      "slot": "weapon",
+      "dice": [
+        1,
+        6
+      ]
+    },
+    {
+      "key": "WARHAMMER",
+      "slot": "weapon",
+      "dice": [
+        1,
+        8
+      ]
+    },
+    {
+      "key": "STAFF",
+      "slot": "weapon",
+      "dice": [
+        1,
+        6
+      ]
+    },
+    {
+      "key": "HWANDO",
+      "slot": "weapon",
+      "dice": [
+        1,
+        8
+      ]
+    },
+    {
+      "key": "GUKGUNG",
+      "slot": "weapon",
+      "dice": [
+        1,
+        8
+      ],
+      "two_handed": true
+    },
+    {
+      "key": "LONGBOW",
+      "slot": "weapon",
+      "dice": [
+        1,
+        8
+      ],
+      "two_handed": true
+    },
+    {
+      "key": "LIGHT_XBOW",
+      "slot": "weapon",
+      "dice": [
+        1,
+        8
+      ],
+      "two_handed": true
+    },
+    {
+      "key": "HAND_XBOW",
+      "slot": "weapon",
+      "dice": [
+        1,
+        6
+      ]
+    },
+    {
+      "key": "SHIELD",
+      "slot": "shield",
+      "ac": 2
+    },
+    {
+      "key": "LEATHER",
+      "slot": "armour",
+      "ac": 1
+    },
+    {
+      "key": "CHAINMAIL",
+      "slot": "armour",
+      "ac": 3
+    },
+    {
+      "key": "HELMET",
+      "slot": "helm",
+      "ac": 1
+    },
+    {
+      "key": "POTION_HP",
+      "slot": "use",
+      "amount": 10,
+      "effect": "hp"
+    },
+    {
+      "key": "POTION_MP",
+      "slot": "use",
+      "amount": 5,
+      "effect": "mp"
+    },
+    {
+      "key": "PORTAL",
+      "slot": "use",
+      "amount": 0,
+      "effect": "none"
+    }
+  ],
+  "classes": [
+    {
+      "key": "FIGHTER",
+      "weapons": [
+        "LONGSWORD",
+        "GREATSWORD",
+        "WARHAMMER",
+        "MACE",
+        "SHORTSWORD",
+        "LONGBOW"
+      ],
+      "shield": true
+    },
+    {
+      "key": "ROGUE",
+      "weapons": [
+        "DAGGER",
+        "SHORTSWORD",
+        "HAND_XBOW",
+        "LIGHT_XBOW",
+        "STAFF"
+      ],
+      "shield": false
+    },
+    {
+      "key": "WIZARD",
+      "weapons": [
+        "STAFF",
+        "DAGGER",
+        "LIGHT_XBOW"
+      ],
+      "shield": false
+    },
+    {
+      "key": "CLERIC",
+      "weapons": [
+        "MACE",
+        "WARHAMMER",
+        "STAFF",
+        "LIGHT_XBOW"
+      ],
+      "shield": true
+    },
+    {
+      "key": "MUSA",
+      "weapons": [
+        "HWANDO",
+        "GUKGUNG",
+        "SHORTSWORD",
+        "DAGGER"
+      ],
+      "shield": false
+    }
+  ]
+}

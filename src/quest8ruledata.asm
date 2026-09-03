@@ -131,35 +131,35 @@ ClassSkill:
     db 5   ; MUSA
     db 75, 73, 32, 32, 32, 32, 32, 32, 32, 0
 
-; --- 몬스터 (battlefield.py monster_pool + monster_stats.py) ------------
+; --- 몬스터. 수치를 고치려면 gfx/monster.json 을 고치세요. -------------
 ; AC, HP, 힘, 피해 개수/면, 무리 최대, 민첩, 그림, 이름 11
 MonsterTable:
-    ; GOBLIN  <- monster_stats.py Goblin
+    ; GOBLIN  <- monster.json (dnd 원본 Goblin)
     db 15, 7, 8, 1, 6, 4, 14
     db SPR_BANK_0
     dw SPR_ADDR_0
     db 71, 79, 66, 76, 73, 78, 32, 32, 32, 32, 32
-    ; SLIME   <- monster_stats.py Ochre Jelly
+    ; SLIME   <- monster.json (dnd 원본 Ochre Jelly)
     db 8, 45, 15, 1, 6, 1, 6
     db SPR_BANK_1
     dw SPR_ADDR_1
     db 83, 76, 73, 77, 69, 32, 32, 32, 32, 32, 32
-    ; DWARF   <- monster_stats.py Guard
+    ; DWARF   <- monster.json (dnd 원본 Guard)
     db 16, 11, 13, 1, 6, 4, 12
     db SPR_BANK_2
     dw SPR_ADDR_2
     db 68, 87, 65, 82, 70, 32, 32, 32, 32, 32, 32
-    ; TROLL   <- monster_stats.py Troll
+    ; TROLL   <- monster.json (dnd 원본 Troll)
     db 15, 84, 18, 1, 6, 1, 13
     db SPR_BANK_3
     dw SPR_ADDR_3
     db 84, 82, 79, 76, 76, 32, 32, 32, 32, 32, 32
-    ; COBRA   <- monster_stats.py Giant Poisonous Snake
+    ; COBRA   <- monster.json (dnd 원본 Giant Poisonous Snake)
     db 14, 11, 10, 1, 6, 4, 18
     db SPR_BANK_4
     dw SPR_ADDR_4
     db 67, 79, 66, 82, 65, 32, 32, 32, 32, 32, 32
-    ; MIMIC   <- monster_stats.py Doppelganger
+    ; MIMIC   <- monster.json (dnd 원본 Doppelganger)
     db 14, 52, 11, 1, 6, 1, 18
     db SPR_BANK_5
     dw SPR_ADDR_5
