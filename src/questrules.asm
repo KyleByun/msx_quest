@@ -113,17 +113,17 @@ SPR_W        equ 64
 SPR_H        equ 64
 SPR_BANKS    equ 2
 SPR_FIRSTBK  equ 3
-SPR_BANK_0_1 equ 3                  ; GOBLIN x1
-SPR_ADDR_0_1 equ 0xA000
-SPR_BANK_1_1 equ 3                  ; SLIME x1
-SPR_ADDR_1_1 equ 0xA34D
-SPR_BANK_2_1 equ 3                  ; DWARF x1
-SPR_ADDR_2_1 equ 0xA85C
-SPR_BANK_3_1 equ 3                  ; TROLL x1
-SPR_ADDR_3_1 equ 0xAE34
-SPR_BANK_4_1 equ 3                  ; COBRA x1
-SPR_ADDR_4_1 equ 0xB429
-SPR_BANK_5_1 equ 4                  ; MIMIC x1
-SPR_ADDR_5_1 equ 0xA000
+SPR_BANK_0_W64 equ 3                  ; GOBLIN 64px
+SPR_ADDR_0_W64 equ 0xA000
+SPR_BANK_1_W64 equ 3                  ; SLIME 64px
+SPR_ADDR_1_W64 equ 0xA34D
+SPR_BANK_2_W64 equ 3                  ; DWARF 64px
+SPR_ADDR_2_W64 equ 0xA85C
+SPR_BANK_3_W64 equ 3                  ; TROLL 64px
+SPR_ADDR_3_W64 equ 0xAE34
+SPR_BANK_4_W64 equ 3                  ; COBRA 64px
+SPR_ADDR_4_W64 equ 0xB429
+SPR_BANK_5_W64 equ 4                  ; MIMIC 64px
+SPR_ADDR_5_W64 equ 0xA000
 ; 뱅크 3: 6667 / 8192 바이트
 ; 뱅크 4: 1671 / 8192 바이트

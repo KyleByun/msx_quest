@@ -207,7 +207,8 @@ FightPtr    ds 2
 TgtPtr      ds 2
 TgtType     ds 2
 TmpDmg      ds 1
-TmpType     ds 1
+TmpType     ds 1                ; 몬스터 **번호** (칸). 종류가 아니다.
+TmpKind     ds 1                ; 몬스터 **종류**. 둘을 한 자리에 담지 않는다.
 TmpMon      ds 2
 
 ; 몬스터 그림 찍기용
@@ -218,7 +219,9 @@ SprLen      ds 1
 
 ; 전투 진행
 MonCount    ds 1                ; 이번에 나온 마릿수
-MonKind     ds 1                ; 나온 종류 (한 무리는 한 종류다)
+MonKind     ds 1                ; 나온 종류 (섞였으면 짝수 칸)
+MonKind2    ds 1                ; 섞였을 때 홀수 칸의 종류. 안 섞였으면 같은 값.
+DungeonFloor ds 1               ; 지하 몇 층인가 (1 부터). 깊을수록 섞인다.
 TurnHero    ds 1                ; 이번 차례에서 다음에 칠 영웅
 TurnMon     ds 1                ; 다음에 칠 몬스터
 
@@ -344,6 +347,9 @@ Init:
     ; 기계에서는 BattleOn 이 0 이 아니라 부팅하자마자 "전투 중" 이 되었다.
     ; 그러면 이동 키가 전부 무시되어 멈춘 것처럼 보이고, 쓰레기 MonKind 로
     ; 몬스터 그림을 그리다가 화면에 줄이 그어졌다.
+
+    ld a, 1                     ; 지하 1 층에서 시작한다 (0 이면 나눗셈과 비교가
+    ld (DungeonFloor), a        ; 어긋난다 - Init 의 0 지우기 뒤라 꼭 넣어야 한다)
 
     ld a, 1                     ; 시작 위치는 MakeLevel 이 첫 방 중심으로 정한다
     ld (posX), a                ; (MakeLevel 실패 대비 기본값)

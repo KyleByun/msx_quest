@@ -101,8 +101,12 @@ T_SPRBANK    equ 7                 ; 그림이 든 ROM 뱅크
 T_SPRADDR    equ 8                 ; 그 뱅크 안의 주소
 T_NAME       equ 10
 ; --- 대열 (몬스터 여럿을 나란히) --------------------------------------
-MON_SCALE_N  equ 4                 ; 한 줄에 몇 마리까지 세우는가
+MON_SCALE_N  equ 5                 ; 한 번에 몇 마리까지 나오는가
 MON_SCALE_ST equ 3                 ; 한 칸 = 뱅크 1 + 주소 2
+MON_MAX_COLS equ 4                 ; 가장 많이 늘어설 때의 칸 수
+ARROW_W      equ 12
+ARROW_H      equ 6
+ARROW_GAP    equ 2                 ; 화살표 끝과 머리 사이
 NAME_CONS_N  equ 15
 NAME_VOW_N   equ 5
 NAME_PAT_N   equ 6
@@ -116,36 +120,36 @@ SPR_W        equ 96
 SPR_H        equ 96
 SPR_BANKS    equ 6
 SPR_FIRSTBK  equ 3
-SPR_BANK_0_1 equ 3                  ; GOBLIN x1
-SPR_ADDR_0_1 equ 0xA000
-SPR_BANK_0_2 equ 3                  ; GOBLIN x2
-SPR_ADDR_0_2 equ 0xAB4E
-SPR_BANK_0_3 equ 3                  ; GOBLIN x3
-SPR_ADDR_0_3 equ 0xAE7B
-SPR_BANK_0_4 equ 3                  ; GOBLIN x4
-SPR_ADDR_0_4 equ 0xB00F
-SPR_BANK_1_1 equ 4                  ; SLIME x1
-SPR_ADDR_1_1 equ 0xA000
-SPR_BANK_2_1 equ 5                  ; DWARF x1
-SPR_ADDR_2_1 equ 0xA000
-SPR_BANK_2_2 equ 5                  ; DWARF x2
-SPR_ADDR_2_2 equ 0xB5C2
-SPR_BANK_2_3 equ 5                  ; DWARF x3
-SPR_ADDR_2_3 equ 0xBBA4
-SPR_BANK_2_4 equ 6                  ; DWARF x4
-SPR_ADDR_2_4 equ 0xA000
-SPR_BANK_3_1 equ 6                  ; TROLL x1
-SPR_ADDR_3_1 equ 0xA1AE
-SPR_BANK_4_1 equ 7                  ; COBRA x1
-SPR_ADDR_4_1 equ 0xA000
-SPR_BANK_4_2 equ 7                  ; COBRA x2
-SPR_ADDR_4_2 equ 0xB6C3
-SPR_BANK_4_3 equ 7                  ; COBRA x3
-SPR_ADDR_4_3 equ 0xBCD9
-SPR_BANK_4_4 equ 8                  ; COBRA x4
-SPR_ADDR_4_4 equ 0xA000
-SPR_BANK_5_1 equ 8                  ; MIMIC x1
-SPR_ADDR_5_1 equ 0xA1B3
+SPR_BANK_0_W24 equ 3                  ; GOBLIN 24px
+SPR_ADDR_0_W24 equ 0xB00F
+SPR_BANK_0_W32 equ 3                  ; GOBLIN 32px
+SPR_ADDR_0_W32 equ 0xAE7B
+SPR_BANK_0_W48 equ 3                  ; GOBLIN 48px
+SPR_ADDR_0_W48 equ 0xAB4E
+SPR_BANK_0_W96 equ 3                  ; GOBLIN 96px
+SPR_ADDR_0_W96 equ 0xA000
+SPR_BANK_1_W96 equ 4                  ; SLIME 96px
+SPR_ADDR_1_W96 equ 0xA000
+SPR_BANK_2_W24 equ 6                  ; DWARF 24px
+SPR_ADDR_2_W24 equ 0xA000
+SPR_BANK_2_W32 equ 5                  ; DWARF 32px
+SPR_ADDR_2_W32 equ 0xBBA4
+SPR_BANK_2_W48 equ 5                  ; DWARF 48px
+SPR_ADDR_2_W48 equ 0xB5C2
+SPR_BANK_2_W96 equ 5                  ; DWARF 96px
+SPR_ADDR_2_W96 equ 0xA000
+SPR_BANK_3_W96 equ 6                  ; TROLL 96px
+SPR_ADDR_3_W96 equ 0xA1AE
+SPR_BANK_4_W24 equ 8                  ; COBRA 24px
+SPR_ADDR_4_W24 equ 0xA000
+SPR_BANK_4_W32 equ 7                  ; COBRA 32px
+SPR_ADDR_4_W32 equ 0xBCD9
+SPR_BANK_4_W48 equ 7                  ; COBRA 48px
+SPR_ADDR_4_W48 equ 0xB6C3
+SPR_BANK_4_W96 equ 7                  ; COBRA 96px
+SPR_ADDR_4_W96 equ 0xA000
+SPR_BANK_5_W96 equ 8                  ; MIMIC 96px
+SPR_ADDR_5_W96 equ 0xA1B3
 ; 뱅크 3: 4354 / 8192 바이트
 ; 뱅크 4: 4770 / 8192 바이트
 ; 뱅크 5: 7800 / 8192 바이트

@@ -13,9 +13,10 @@
 ; 번갈아** 친다. 우리 편 하나, 상대 하나, 다시 우리 편 하나... 이렇게 가면
 ; 오른쪽 창에 주고받는 것이 그대로 흘러간다.
 ;
-; 한 무리는 한 종류다. 그래야 그림 한 장으로 무리를 나타낼 수 있고, 실제로
-; Bard`s Tale 도 그렇게 한다. 마릿수는 종류마다 정해 둔 최대치 안에서 뽑는다
-; (약한 것은 떼로, 트롤 같은 것은 한 마리만).
+; 마릿수는 종류마다 정해 둔 최대치 안에서 뽑는다 (약한 것은 떼로, 트롤 같은
+; 것은 한 마리만). 1 층에서는 한 무리가 한 종류지만, 층이 깊어지면 두 종류가
+; 섞여 나오기도 한다(MIX_FLOOR). 그래서 AC / 힘 / 주사위 / 민첩 / 그림은 무리의
+; MonKind 가 아니라 **그 칸의 M_TYPE** 을 봐야 한다 - MonTypeOf 를 거친다.
 ;
 ; 옮기지 않은 것: battlefield.py 의 격자 이동, 주문 사거리, 몬스터 길찾기.
 ;-----------------------------------------------------------------------------
@@ -40,50 +41,87 @@ MonTypePtr:
     ret
 
 ;-----------------------------------------------------------------------------
-; 무리 하나 만들기. 한 종류로만 채우고 마릿수만 정한다.
+; 무리 하나 만들기. 칸마다 종류와 HP 를 넣는다.
 ;-----------------------------------------------------------------------------
 MakeEncounter:
     ld c, MONSTER_N
     call RandMod
     ld (MonKind), a
+    ld (MonKind2), a            ; 기본은 한 종류다
+
+    IFDEF SCREEN8
+    ; 층이 깊어지면 두 종류가 섞여 나오기도 한다. 1 층은 예전 그대로 한 종류라
+    ; 굴림의 차례도 그대로다 - SCREEN 5 와 기존 검사가 안 흔들린다.
+    ld a, (DungeonFloor)
+    cp MIX_FLOOR
+    jr c, .onekind
+    ld c, MIX_ODDS
+    call RandMod
+    or a
+    jr nz, .onekind
+    ld c, MONSTER_N
+    call RandMod
+    ld (MonKind2), a
+.onekind:
+    ENDIF
+
+    ld a, (MonKind)             ; 마릿수는 앞 종류의 무리 최대로 정한다
     call MonTypePtr
-    push hl
     ld de, T_MAXGRP
     add hl, de
     ld c, (hl)
     call RandMod
     inc a
     ld (MonCount), a
-    pop hl
-    ld de, T_HP
-    add hl, de
-    ld a, (hl)
-    ld (TmpDmg), a              ; 종류의 기본 HP 를 잠시 여기 둔다
 
+    ; 칸마다 종류와 HP 를 따로 넣는다. 섞였으면 짝수 칸이 앞 종류, 홀수 칸이
+    ; 뒤 종류다 - 무작위로 흩으면 같은 화면이 두 번 안 나와서 검사하기 어렵다.
     ld b, MON_N
     ld c, 0
 .each:
     push bc
-    ld a, c
-    call MonPtr
-    ld a, (MonKind)
-    ld (hl), a                  ; M_TYPE
-    inc hl
-    pop bc
-    push bc
     ld a, (MonCount)            ; 무리 밖의 자리는 HP 0 (처음부터 없는 셈)
     cp c
-    ld a, 0
     jr z, .empty
     jr c, .empty
-    ld a, (TmpDmg)
+    ld a, (MonKind)
+    bit 0, c
+    jr z, .got
+    ld a, (MonKind2)
+.got:
+    ld (TmpKind), a             ; 이 칸의 종류
+    call MonTypePtr             ; BC 를 뭉갠다 - 위에서 밀어 두었다
+    ld de, T_HP
+    add hl, de
+    ld a, (hl)
+    ld (TmpDmg), a              ; 이 칸의 HP
+    jr .put
 .empty:
+    ld a, (MonKind)             ; 빈 칸에도 종류는 넣어 둔다 (표 밖을 안 가리게)
+    ld (TmpKind), a
+    xor a
+    ld (TmpDmg), a
+.put:
+    pop bc
+    push bc
+    ld a, c
+    call MonPtr
+    ld a, (TmpKind)
+    ld (hl), a                  ; M_TYPE
+    inc hl
+    ld a, (TmpDmg)
     ld (hl), a                  ; M_HP
     inc hl
     ld (hl), a                  ; M_MAXHP
     pop bc
     inc c
     djnz .each
+    ret
+
+; A = 몬스터 번호 -> A = 그 칸의 종류. 섞인 무리에서는 칸마다 다르다.
+MonTypeOf:
+    call MonPtr
+    ld a, (hl)                  ; M_TYPE
     ret
 
 ;-----------------------------------------------------------------------------
@@ -232,18 +270,19 @@ RandomHero:
 ; 메시지에 몬스터 이름을 붙인다. 무리가 둘 이상이면 뒤에 번호를 단다.
 ; A = 몬스터 번호
 ;-----------------------------------------------------------------------------
-; 번호 없이 종류 이름만 (무리를 소개할 때 쓴다)
+; A = 종류. 번호 없이 이름만 (무리를 소개할 때 쓴다)
 MsgAddMonKind:
-    ld a, (MonKind)             ; 이름은 MonsterTable 이 아니라 말별 표에 있다
-    ld h, a
+    ld h, a                     ; 이름은 MonsterTable 이 아니라 말별 표에 있다
     ld e, MONNAME_LEN
     call Mult8
     ld de, (MonNameTab)
     add hl, de
     jp MsgAddStr                ; 이름 표는 0 으로 끝난다
 
+; A = 몬스터 번호. 그 칸의 종류 이름 + (둘 이상이면) 칸 번호.
 MsgAddMonName:
     push af
+    call MonTypeOf
     call MsgAddMonKind
     pop af
     ld b, a
@@ -297,8 +336,9 @@ HeroAttack:
     or a
     call nz, ApplyMode
 
-    ld a, (MonKind)             ; 맞는 쪽 AC 는 표에서
-    call MonTypePtr
+    ld a, (TmpType)             ; 맞는 쪽 AC 는 **그 칸의** 종류에서.
+    call MonTypeOf              ; TmpType 은 칸 번호이므로 종류를 한 번 거친다.
+    call MonTypePtr             ; (섞인 무리는 칸마다 AC 가 다르다)
     ld a, (hl)                  ; T_AC
     ld (TgtAc), a
 
@@ -367,7 +407,8 @@ MonAttack:
     or a
     ret z
 
-    ld a, (MonKind)
+    ld a, (TmpType)             ; 치는 쪽도 **그 칸의** 종류다
+    call MonTypeOf              ; TmpType 은 칸 번호다
     call MonTypePtr
     push hl
     ld de, T_STR                ; 공격 보정 = 2 + 힘 보정 (enemy.py)
@@ -980,12 +1021,45 @@ CalcActs:
     ret
 
 ; A = 지금 무리의 민첩. HL, BC, DE 파괴.
+;
+; 섞인 무리는 칸마다 민첩이 다르다. **살아 있는 것들 중 가장 낮은 값**을 쓴다 -
+; 무리의 행동 횟수는 하나뿐이고, 빠른 쪽에 맞추면 굼뜬 놈이 덤으로 빨라진다.
+; 한 종류뿐이면 예전과 같은 값이 나오므로 기존 검사가 그대로 돈다.
 MonDex:
-    ld a, (MonKind)
+    ld c, 255
+    ld b, MON_N
+    ld hl, Monsters
+.next:
+    push bc
+    ld a, (hl)                  ; M_TYPE
+    inc hl
+    ld e, (hl)                  ; M_HP
+    inc hl
+    inc hl
+    inc hl                      ; 다음 칸 (MON_STRIDE = 4)
+    push hl
+    inc e
+    dec e
+    jr z, .skip                 ; 쓰러진 놈은 안 센다
     call MonTypePtr
     ld de, T_DEX
     add hl, de
     ld a, (hl)
+    pop hl
+    pop bc
+    cp c
+    jr nc, .cont
+    ld c, a
+    jr .cont
+.skip:
+    pop hl
+    pop bc
+.cont:
+    djnz .next
+    ld a, c
+    cp 255                      ; 아무도 안 남았으면 (있을 수 없지만) 1 로
+    ret nz
+    ld a, 1
     ret
 
 ; E = 민첩 -> A = 행동 횟수 (최소 1). BC, DE, HL 파괴.
@@ -1030,7 +1104,18 @@ StartBattle:
     ld a, MSG_SPACE
     call MsgText
     call MsgAddStr
+    ld a, (MonKind)
     call MsgAddMonKind
+    ld a, (MonKind2)            ; 섞였으면 뒤 종류도 적는다 - 안 적으면 화면에
+    ld hl, MonKind              ; 없는 몬스터가 때리는 것처럼 보인다
+    cp (hl)
+    jr z, .onekind
+    push af
+    ld a, '+'
+    call MsgAddChar
+    pop af
+    call MsgAddMonKind
+.onekind:
     call MsgFlush
     ld a, MSG_APPEAR
     call MsgText
@@ -1048,6 +1133,11 @@ StartBattle:
 ; 한 칸 옮길 때마다 굴린다. 여덟 칸에 한 번꼴이면 통로를 몇 번 돌 때마다 한 번
 ; 붙게 되어, 지도를 보러 다니는 재미와 전투가 적당히 섞인다.
 ;-----------------------------------------------------------------------------
+; 두 종류가 섞이는 규칙. 2 층부터, 그리고 세 번에 한 번꼴이다.
+; 늘 섞이면 무리가 한 종류라는 것이 주는 "이 층은 고블린 소굴" 하는 느낌이 없어진다.
+MIX_FLOOR   equ 2
+MIX_ODDS    equ 3
+
 ENCOUNTER_ODDS equ 8
 
 RollEncounter:

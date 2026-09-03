@@ -4,24 +4,32 @@
 ; 예전에는 무리가 몇 마리든 던전 창 한가운데에 그림 **한 장**을 놓았다. 셋이
 ; 나와도 화면은 한 마리였고, "GOBLIN 2 를 쳤다" 는 기록만으로 짐작해야 했다.
 ;
-; 이제 n 마리가 나오면 한 마리를 VIEW_W/n 폭으로 줄여 나란히 놓는다. 줄인
-; 그림은 실행 중에 만들지 않고 gfx/quest_sprite.py 가 미리 구워 둔다 - 원본이
-; 64x64 라 파이썬에서 줄이면 곱게 줄고, Z80 은 늘 하던 대로 찍기만 하면 된다.
-; MonSprTab 이 (종류, 마릿수) -> (뱅크, 주소) 를 준다.
+; 이제 n 마리가 나오면 한 마리를 줄여 나란히 놓는다. 넷까지는 한 줄이고 다섯이면
+; 한 줄에 19 픽셀이 되어 알아볼 수 없으므로 3 칸 x 2 줄로 세운다.
+;
+; **배치는 여기서 계산하지 않는다.** gfx/quest_geom.py 의 mon_layout 이 정본이고
+; quest_rules.py 가 마릿수별 표(MonSprW / MonColsTab / MonTopTab / MonStepTab)로
+; 구워 준다. Z80 은 나눗셈이 비싸기도 하지만, 그보다 그리는 쪽과 고르는 쪽이 각자
+; 계산하면 반드시 어긋나기 때문이다.
+;
+; 줄인 그림도 실행 중에 만들지 않고 미리 구워 둔다 - 원본이 64x64 라 파이썬에서
+; 줄이면 곱게 줄고, Z80 은 늘 하던 대로 찍기만 하면 된다. MonSprTab 이
+; (종류, 마릿수) -> (뱅크, 주소) 를 준다.
 ;
 ; **칸은 무리가 만들어질 때 정해지고 끝까지 그대로다.** 죽은 놈의 자리는 비워
 ; 두고 뒤엣것을 당겨오지 않는다. 당겨오면 기록창의 "GOBLIN 3" 이 가리키는 칸이
 ; 라운드마다 달라져서 어느 놈을 쳤는지 알 수 없게 된다. MsgAddMonName 은 칸
 ; 번호 + 1 을 찍고 여기도 칸 번호대로 놓으므로, 둘이 늘 같은 것을 가리킨다.
 ;
+; 칸마다 종류가 다를 수 있다(층이 깊으면 두 종류가 섞인다). 그래서 그림도 무리의
+; MonKind 가 아니라 **그 칸의 M_TYPE** 을 보고 고른다.
+;
 ; 화살표는 고른 놈 머리 위에 찍는다. 옮길 때마다 던전을 다시 그리면 느리므로,
-; 화살표가 지나다니는 띠(VIEW_W x ARROW_H)를 처음에 화면 밖 VRAM 으로 옮겨 두고
-; 옮길 때마다 되돌린다. HMMM 두 번이라 눈에 안 띈다.
+; 화살표가 지나다니는 띠(VIEW_W x ARROW_H)를 화면 밖 VRAM 으로 옮겨 두고 옮길
+; 때마다 되돌린다. 두 줄일 때는 줄마다 띠의 y 가 다르므로, 옮기기 전에 **지금
+; 떠 둔 띠부터 되돌리고** 새 줄의 띠를 뜬다.
 ;-----------------------------------------------------------------------------
 
-ARROW_W     equ 12
-ARROW_H     equ 6
-ARROW_GAP   equ 2               ; 화살표 끝과 머리 사이
 ARROW_COL   equ 0xFC            ; GRB332 로 노랑 (G 7, R 7, B 0). 던전에 없는 색이다.
 
 ; 화살표 밑그림을 옮겨 둘 화면 밖 VRAM 의 줄 번호.
@@ -29,10 +37,17 @@ ARROW_COL   equ 0xFC            ; GRB332 로 노랑 (G 7, R 7, B 0). 던전에 �
 SAVE_VY     equ 300
     ASSERT SAVE_VY >= FRONT_VY + (FRONT_PIX_LEN + VRAM_ROW - 1) / VRAM_ROW
     ASSERT MON_SCALE_N <= MON_N
-    ASSERT ARROW_W <= VIEW_W / MON_SCALE_N
+    ASSERT ARROW_W <= VIEW_W / MON_MAX_COLS
+
+; HL = 표, C = 색인 -> A = 그 바이트. HL, B 파괴.
+TabByte:
+    ld b, 0
+    add hl, bc
+    ld a, (hl)
+    ret
 
 ;-----------------------------------------------------------------------------
-; 이번 무리를 몇 칸으로 세울지 정한다. A = 칸 수, MonRowW = 한 칸의 폭.
+; 이번 무리의 배치를 정한다. A = 칸 수.
 ;
 ; 값이 깨져 칸 수가 표 밖으로 나가면 한 마리로 본다. 그래야 없는 크기의 그림을
 ; 찾지 않는다.
@@ -46,29 +61,78 @@ MonRowSize:
 .one:
     ld a, 1
 .ok:
-    ld c, a                     ; C = 칸 수
+    ld (MonRowN), a
     dec a
+    ld c, a                     ; C = 표 색인 (마릿수 - 1)
     ld hl, MonSprW
-    call AddA
-    ld a, (hl)
+    call TabByte
     ld (MonRowW), a
-    ld a, c
+    ld hl, MonColsTab
+    call TabByte
+    ld (MonRowCols), a
+    ld hl, MonTopTab
+    call TabByte
+    ld (MonRowTop), a
+    ld hl, MonStepTab
+    call TabByte
+    ld (MonRowStep), a
+    ld a, (MonRowN)
     ret
 
 ;-----------------------------------------------------------------------------
-; A = 칸 수. 그 크기의 그림을 0xA000 창에 걸고 HL 에 자료 첫 주소를 준다.
-; 색인은 종류 * MON_SCALE_N + (칸 수 - 1) 이고 한 칸이 MON_SCALE_ST 바이트다.
+; A = 칸 번호 -> MonSelCol / MonSelRow.
+; 칸 수가 1~4 뿐이라 나눗셈 대신 빼기로 센다.
+;-----------------------------------------------------------------------------
+SlotColRow:
+    ld c, 0
+    ld hl, MonRowCols
+.div:
+    cp (hl)
+    jr c, .done
+    sub (hl)
+    inc c
+    jr .div
+.done:
+    ld (MonSelCol), a
+    ld a, c
+    ld (MonSelRow), a
+    ret
+
+;-----------------------------------------------------------------------------
+; MonSelCol / MonSelRow -> MonRowX / MonRowY (그 칸의 왼쪽 위).
+;-----------------------------------------------------------------------------
+CellXY:
+    ld a, (MonRowW)
+    ld e, a
+    ld a, (MonSelCol)
+    ld h, a
+    call Mult8                  ; HL = 열 * 폭
+    ld a, l
+    add a, VIEW_X
+    ld (MonRowX), a
+    ld a, (MonRowStep)
+    ld e, a
+    ld a, (MonSelRow)
+    ld h, a
+    call Mult8                  ; HL = 줄 * 줄간격
+    ld a, (MonRowTop)
+    add a, l
+    ld (MonRowY), a
+    ret
+
+;-----------------------------------------------------------------------------
+; A = 종류. 지금 대열 크기에 맞는 그림을 0xA000 창에 걸고 HL 에 준다.
+; 색인은 종류 * MON_SCALE_N + (마릿수 - 1), 한 칸이 MON_SCALE_ST 바이트.
 ;-----------------------------------------------------------------------------
 MonSprPtr:
-    dec a
-    ld c, a
-    ld a, (MonKind)
     ld h, a
     ld e, MON_SCALE_N * MON_SCALE_ST
     call Mult8
-    ld a, c                     ; + (칸 수 - 1) * 3
+    ld a, (MonRowN)
+    dec a
+    ld c, a
     add a, a
-    add a, c
+    add a, c                    ; * 3
     call AddA
     ld de, MonSprTab
     add hl, de
@@ -85,36 +149,27 @@ MonSprPtr:
 ; 무리를 통째로 찍는다. 던전을 먼저 그린 뒤에 부른다.
 ;-----------------------------------------------------------------------------
 DrawMonsterRow:
-    ld a, (MonKind)
-    cp MONSTER_N                ; 종류가 표 밖이면 아무것도 안 그린다
-    ret nc
     call MonRowSize
-    ld (MonRowN), a
-    call MonSprPtr
-    ld (MonRowPtr), hl
-
-    ld a, VIEW_H                ; 세로는 가운데 - 정면에서 눈높이에 선다.
-    ld hl, MonRowW              ; 바닥에 붙이면 넷일 때 발치에 몰려 보인다.
-    sub (hl)
-    srl a
-    add a, VIEW_Y
-    ld (MonRowY), a
-
-    ld a, VIEW_X
-    ld (MonRowX), a
     xor a
     ld (MonRowI), a
 .each:
     ld a, (MonRowI)
     call MonPtr
-    inc hl                      ; M_HP - 쓰러진 놈은 자리만 비워 둔다
-    ld a, (hl)
-    or a
-    call nz, DrawOneMon
-    ld a, (MonRowX)
-    ld hl, MonRowW
-    add a, (hl)
-    ld (MonRowX), a
+    ld a, (hl)                  ; M_TYPE - 칸마다 종류가 다를 수 있다
+    inc hl
+    ld c, (hl)                  ; M_HP
+    inc c
+    dec c
+    jr z, .skip                 ; 쓰러진 놈은 자리만 비워 둔다
+    cp MONSTER_N                ; 종류가 표 밖이면 안 그린다 (값이 깨져도 안전하게)
+    jr nc, .skip
+    call MonSprPtr
+    ld (MonRowPtr), hl
+    ld a, (MonRowI)
+    call SlotColRow
+    call CellXY
+    call DrawOneMon
+.skip:
     ld hl, MonRowI
     inc (hl)
     ld a, (MonRowN)
@@ -194,33 +249,29 @@ DrawOneMon:
 ; 화살표
 ;=============================================================================
 
-; 화살표가 지나다닐 줄을 정한다. 대열 위 ARROW_GAP 만큼 띄운 자리다.
-ArrowSetup:
-    call MonRowSize
-    ld a, VIEW_H
-    ld hl, MonRowW
-    sub (hl)
-    srl a
-    add a, VIEW_Y
+;-----------------------------------------------------------------------------
+; A = 칸 번호. 그 칸 위의 띠를 화면 밖에 떠 두고 삼각형을 찍는다.
+;-----------------------------------------------------------------------------
+ShowArrow:
+    call SlotColRow
+    call CellXY                 ; MonRowX/Y = 그 칸의 왼쪽 위
+    ld a, (MonRowY)
     sub ARROW_GAP + ARROW_H
     ld (ArrowY), a
-    ret
+    ld a, (MonRowW)             ; 칸 안에서 가운데로
+    sub ARROW_W
+    srl a
+    ld hl, MonRowX
+    add a, (hl)
+    ld (ArrowX), a
+    call BandSave
+    ; 이어서 삼각형을 찍는다
 
 ;-----------------------------------------------------------------------------
-; A = 칸 번호. 그 칸 위에 아래를 가리키는 삼각형을 찍는다.
+; (ArrowX, ArrowY) 에 아래를 가리키는 삼각형을 찍는다.
 ; 줄마다 양쪽에서 한 픽셀씩 좁아진다 (12, 10, 8, 6, 4, 2).
 ;-----------------------------------------------------------------------------
-DrawArrow:
-    ld h, a
-    ld a, (MonRowW)
-    ld e, a
-    call Mult8                  ; HL = 칸 번호 * 칸 폭
-    ld a, (MonRowW)
-    sub ARROW_W
-    srl a                       ; 칸 안에서 가운데로
-    add a, l
-    add a, VIEW_X
-    ld (ArrowX), a
+DrawArrowNow:
     ld a, (ArrowY)
     ld (SprY), a
     ld b, ARROW_H
@@ -256,7 +307,7 @@ DrawArrow:
 ;-----------------------------------------------------------------------------
 ; 화살표가 지나다니는 띠를 화면 밖으로 옮겨 두고(BandSave), 되돌린다(BandRestore).
 ;
-; 띠의 y 만 무리 크기에 따라 달라지므로, 틀을 RAM 으로 옮기고 그 자리에만 넣는다.
+; 띠의 y 만 달라지므로 틀을 RAM 으로 옮기고 그 자리에만 넣는다.
 ;-----------------------------------------------------------------------------
 BandSave:
     ld hl, CmdBandSave
@@ -299,6 +350,9 @@ SendBandCmd:
 ; 살아 있는 것이 하나뿐이면 묻지 않는다 - 고를 것이 없는데 스페이스를 한 번 더
 ; 누르게 하면 번거롭기만 하다.
 ;
+; 좌우는 한 칸씩, 상하는 한 줄씩(= 칸 수만큼) 옮긴다. 두 줄일 때 위아래로도
+; 고를 수 있어야 하기 때문이다.
+;
 ; 새로 눌린 키만 본다. 명령 메뉴에서 결정한 스페이스가 여기까지 흘러들면 첫
 ; 칸이 저절로 골라진다 - AskCommand 가 prevKey 를 남겨 두므로 그 스페이스는
 ; 여기서 "이미 눌려 있던 것" 이 되어 걸러진다.
@@ -312,19 +366,15 @@ PickTarget:
 .some:
     cp 2
     jp c, FirstMonster          ; 하나뿐이면 그것으로
-    ; 칸 수를 여기서 다시 정한다. NextLiving 은 MonRowN 을 보고 감기는데 그것을
+    ; 배치를 여기서 다시 정한다. NextLiving 은 MonRowN 을 보고 감기는데 그것을
     ; 쓰는 것은 DrawMonsterRow 다. 그리기가 아직 안 돌았으면 지난 판의 값이
     ; 남아 있어, 마지막 칸에 못 가거나 빈 칸에 화살표가 서게 된다. 지금은
     ; StartBattle 이 needDraw 를 세워 두어 늘 먼저 도는데, 그 차례에 기대지
     ; 않는 편이 낫다 - 둘 다 MonCount 에서 같은 순간에 뽑는다.
     call MonRowSize
-    ld (MonRowN), a
     call FirstMonster
     ld (MonSel), a
-    call ArrowSetup
-    call BandSave
-    ld a, (MonSel)
-    call DrawArrow
+    call ShowArrow
 .loop:
     call WaitVBlank
     call ReadInput
@@ -344,12 +394,19 @@ PickTarget:
     jr nz, .move
     ld a, -1
     bit KEY_LEFT, c
+    jr nz, .move
+    ld a, (MonRowCols)          ; 아래 = 한 줄 아래
+    bit KEY_DOWN, c
+    jr nz, .move
+    ld a, (MonRowCols)
+    neg
+    bit KEY_UP, c
     jr z, .loop
 .move:
     call NextLiving
-    call BandRestore
+    call BandRestore            ; **먼저** 지금 떠 둔 띠를 되돌린다
     ld a, (MonSel)
-    call DrawArrow
+    call ShowArrow              ; 그 다음에 새 줄의 띠를 뜨고 찍는다
     jr .loop
 .done:
     call BandRestore
@@ -358,32 +415,52 @@ PickTarget:
     ret
 
 ;-----------------------------------------------------------------------------
-; A = +1 또는 -1. MonSel 을 그 방향으로 옮겨 살아 있는 칸에 세운다.
-; **살아 있는 것이 둘 이상일 때만 부른다.** 하나도 없으면 영영 돈다.
+; A = 걸음(부호 있음, -칸수..+칸수). MonSel 을 그만큼 옮기고, 그 칸이 죽었으면
+; **같은 방향으로** 한 칸씩 더 가서 살아 있는 칸에 선다.
+;
+; 건너뛴 뒤로는 1 씩 가는 이유: 상하 걸음은 칸 수만큼인데, 그 방향으로 계속
+; 칸 수만큼 더하면 칸 수와 걸음의 최대공약수에 따라 몇 칸을 영영 못 밟는다
+; (4 칸에서 2 씩이면 짝수 칸만 돈다).
+;
+; **살아 있는 것이 하나라도 있을 때만 부른다.** 하나도 없으면 영영 돈다.
 ;-----------------------------------------------------------------------------
 NextLiving:
-    ld b, a
+    ld b, a                     ; B = 걸음
     ld a, (MonRowN)
-    ld c, a
-.step:
+    ld c, a                     ; C = 칸 수
     ld a, (MonSel)
     add a, b
-    cp c
-    jr c, .have
-    bit 7, b                    ; 끝을 넘었으면 반대쪽으로 감는다
-    jr z, .first
-    ld a, c
-    dec a
-    jr .have
-.first:
-    xor a
-.have:
+    call WrapCell
     ld (MonSel), a
+    ld a, b                     ; 이제부터는 걸음의 **부호**만 쓴다
+    and 0x80
+    ld b, 1
+    jr z, .step
+    ld b, -1
+.step:
+    ld a, (MonSel)
     call MonPtr
     inc hl                      ; M_HP
     ld a, (hl)
     or a
-    jr z, .step
+    ret nz
+    ld a, (MonSel)
+    add a, b
+    call WrapCell
+    ld (MonSel), a
+    jr .step
+
+; A = 칸 번호(한 바퀴 안에서 넘치거나 모자란 값), C = 칸 수 -> 0..C-1 로 감는다.
+; 걸음이 칸 수를 넘지 않으므로 한 번 더하거나 빼면 된다.
+WrapCell:
+    bit 7, a
+    jr z, .high
+    add a, c
+    ret
+.high:
+    cp c
+    ret c
+    sub c
     ret
 
 ;-----------------------------------------------------------------------------

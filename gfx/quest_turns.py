@@ -96,7 +96,10 @@ def write_tcl(outdir):
         for i in range(MON_N):
             b = S["Monsters"] + i * MON_STRIDE
             hp = BIG_HP if i < nmon else 0
-            w += ["debug write memory %d %d" % (b + 1, hp),
+            # 종류는 **칸마다** 있다(M_TYPE). 층이 깊으면 한 무리에 두 종류가
+            # 섞이므로 MonKind 하나로는 모자라고, MonDex 도 칸을 본다.
+            w += ["debug write memory %d %d" % (b + 0, kind),
+                  "debug write memory %d %d" % (b + 1, hp),
                   "debug write memory %d %d" % (b + 2, hp)]
         w += ["debug write memory %d %d" % (S["MonCount"], nmon),
               "debug write memory %d %d" % (S["MonKind"], kind),

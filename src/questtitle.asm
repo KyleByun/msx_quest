@@ -184,7 +184,7 @@ TitleClearText:
     ld (CmdFirst), a
     ld b, 11
     call SendVdpCmd
-    jp WaitVdpCmd
+    jp WaitVdpCmd               ; 지우는 중에 글자를 찍으면 그 글자가 날아간다
 
 CmdTitleClear:                  ; R#36 부터: DX, DY, NX, NY, CLR, ARG, CMD
     dw 0

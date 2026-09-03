@@ -42,7 +42,12 @@ HAN_BASE = 0x5B
 # 걸쇠 하나로 한다 - 문자열을 훑는 자리가 넷이라 거기서 다루면 하나를 빠뜨린다.
 HAN_ESC_BYTE = 0xFF
 HAN_ESC = HAN_ESC_BYTE - HAN_BASE       # 164 - 한 바이트로 담기는 글자 수
-HAN_MAX = HAN_ESC + 256                 # 420 자까지
+# 둘째 바이트는 (번호 - HAN_ESC) 에 **1 을 더해** 적는다. 안 더하면 164 번
+# 글자가 0xFF, 0x00 이 되는데 0x00 은 문자열 끝 표시다. 실제로 "트롤" 이
+# 0xFF 하나로 잘려서, 이름이 사라지고 걸쇠가 남아 **다음 글자**까지 엉뚱한
+# 것으로 바뀌었다.
+HAN_ESC_BIAS = 1
+HAN_MAX = HAN_ESC + 256 - HAN_ESC_BIAS  # 419 자까지
 
 LANGS = ("en", "ko")
 
@@ -115,11 +120,16 @@ def encode(s, index):
                 out.append(HAN_BASE + n)
             else:
                 out.append(HAN_ESC_BYTE)    # 탈출 - 다음 바이트가 나머지 번호
-                out.append(n - HAN_ESC)
+                out.append(n - HAN_ESC + HAN_ESC_BIAS)
         elif 0x20 <= ord(ch) < HAN_BASE:
             out.append(ord(ch))
         else:
             raise SystemExit("폰트에 없는 글자: %r (U+%04X) in %r" % (ch, ord(ch), s))
+    if 0 in out:
+        # 0 은 문자열 끝 표시다. 글자 하나가 0 으로 나오면 이름이 거기서 잘리고,
+        # 남은 탈출 걸쇠가 **다음 글자**까지 엉뚱한 것으로 바꾼다.
+        sys.exit("%r 을 구웠더니 가운데에 0 바이트가 나옵니다: %s\n"
+                 "  0 은 문자열 끝 표시라 거기서 잘립니다." % (s, list(out)))
     return bytes(out)
 
 
@@ -202,6 +212,8 @@ def main():
          "HAN_BASE     equ 0x%02X                ; 이 값 이상이면 한글 글리프 번호다" % HAN_BASE,
          "HAN_ESC_BYTE equ 0x%02X                ; 이 바이트는 안 찍는다 - 다음 글자에 얹는다" % HAN_ESC_BYTE,
          "HAN_ESC      equ %d               ; 탈출한 글자의 번호는 여기서부터" % HAN_ESC,
+         "HAN_ESC_BIAS equ %d                 ; 둘째 바이트에 더해 둔 값 (0 을 피한다)"
+         % HAN_ESC_BIAS,
          "HANGUL_ADV   equ %d                 ; 한글 한 칸 (영문은 FONT_W = 6)" % cfg["hangul_adv"],
          "HAN_N        equ %d                ; 구워 넣은 한글 글자 수" % len(chars),
          "MSG_N        equ %d" % len(ids),

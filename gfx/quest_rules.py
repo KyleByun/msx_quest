@@ -258,6 +258,7 @@ def db_sbytes(vals):
 # 팔레트는 gfx/quest_pal.py 가 정본이다. 예전에는 여기에 같은 값을 다시 적어
 # 두고 "quest_convert.py 와 같아야 한다"는 주석만 달았는데, 한쪽만 고치면 조용히
 # 어긋난다.
+import quest_geom as G
 from quest_geom import VIEW_W
 from quest_pal import PAL333
 
@@ -485,31 +486,52 @@ def main():
         A("    db %d, %d, %d, %d, %d, %d, %d" % (m["ac"], min(255, m["hp"]), m["str"],
                                                  m["dcnt"], m["dside"], m["grp"],
                                                  m["dex"]))
-        A("    db SPR_BANK_%d_1" % i)
-        A("    dw SPR_ADDR_%d_1" % i)
+        A("    db SPR_BANK_%d_W%d" % (i, SPR_SIZE))
+        A("    dw SPR_ADDR_%d_W%d" % (i, SPR_SIZE))
         A(db_str(pad(m["name"], 11)))
     A("")
 
-    # ---- 대열용 축소본 표 ----
+    # ---- 대열 ----
     #
-    # n 마리가 나오면 한 마리를 VIEW_W/n 폭으로 그려 나란히 놓는다. 종류마다
-    # n = 1..MON_SCALE_N 의 (뱅크, 주소) 를 늘어놓아 asm 이 곱셈 없이 찾는다.
-    # 무리 최대를 넘는 자리는 한 마리짜리를 되풀이한다 - 닿을 일이 없지만
-    # 값이 깨졌을 때 빈 뱅크를 가리키는 것보다 낫다.
+    # 무리를 창에 어떻게 세우는지는 gfx/quest_geom.py 의 mon_layout 이 정본이고,
+    # 여기서는 그것을 마릿수별 표로 펴서 굽기만 한다. Z80 은 나눗셈이 비싸서
+    # "다섯 마리면 3 칸 2 줄" 같은 계산을 실행 중에 하고 싶지 않고, 무엇보다
+    # 그리는 쪽과 고르는 쪽이 각자 계산하면 어긋난다.
     #
     # 4bpp 는 대열을 쓰지 않으므로 표를 내지 않는다 (quest_sprite.py 참고).
     if BPP == 8:
         maxgrp = max(m["grp"] for m in R["monsters"])
+        bad = []
         for n in range(1, maxgrp + 1):
-            if VIEW_W % n:
-                sys.exit("무리 최대가 %d 인데 뷰포트 폭 %d 가 %d 로 나눠떨어지지 "
-                         "않는다.\n  monster.json 의 group_max 를 %d 의 약수로 "
-                         "두세요." % (maxgrp, VIEW_W, n, VIEW_W))
+            cols, rows, w, top, step = G.mon_layout(n)
+            band = G.ARROW_H + G.ARROW_GAP
+            if VIEW_W % cols:
+                bad.append("%d 마리는 %d 칸인데 창 폭 %d 가 안 나눠떨어진다"
+                           % (n, cols, VIEW_W))
+            if n > 1 and top - band < G.VIEW_Y:
+                bad.append("%d 마리일 때 화살표가 창 위로 %d 픽셀 넘어간다"
+                           % (n, G.VIEW_Y - (top - band)))
+            bottom = top + (rows - 1) * step + w
+            if bottom > G.VIEW_Y + G.VIEW_H:
+                bad.append("%d 마리일 때 대열이 창 아래로 %d 픽셀 넘어간다"
+                           % (n, bottom - (G.VIEW_Y + G.VIEW_H)))
+            if G.ARROW_W > w:
+                bad.append("%d 마리일 때 칸이 %d 픽셀인데 화살표가 %d 다"
+                           % (n, w, G.ARROW_W))
+        if bad:
+            sys.exit("대열이 창에 안 들어갑니다:\n  " + "\n  ".join(bad))
+
+        lay = [G.mon_layout(n) for n in range(1, maxgrp + 1)]
         to_const()
         A("; --- 대열 (몬스터 여럿을 나란히) --------------------------------------")
-        A("MON_SCALE_N  equ %d                 ; 한 줄에 몇 마리까지 세우는가"
+        A("MON_SCALE_N  equ %d                 ; 한 번에 몇 마리까지 나오는가"
           % maxgrp)
         A("MON_SCALE_ST equ 3                 ; 한 칸 = 뱅크 1 + 주소 2")
+        A("MON_MAX_COLS equ %d                 ; 가장 많이 늘어설 때의 칸 수"
+          % max(l[0] for l in lay))
+        A("ARROW_W      equ %d" % G.ARROW_W)
+        A("ARROW_H      equ %d" % G.ARROW_H)
+        A("ARROW_GAP    equ %d                 ; 화살표 끝과 머리 사이" % G.ARROW_GAP)
         to_data()
         A("; 종류마다 1..%d 마리일 때 쓸 그림. 색인은 종류*%d + (마릿수-1)."
           % (maxgrp, maxgrp))
@@ -517,13 +539,17 @@ def main():
         for i, m in enumerate(R["monsters"]):
             A("    ; %s (무리 최대 %d)" % (m["name"], m["grp"]))
             for n in range(1, maxgrp + 1):
-                k = n if n <= m["grp"] else 1
-                A("    db SPR_BANK_%d_%d" % (i, k))
-                A("    dw SPR_ADDR_%d_%d" % (i, k))
+                w = G.mon_layout(n if n <= m["grp"] else 1)[2]
+                A("    db SPR_BANK_%d_W%d" % (i, w))
+                A("    dw SPR_ADDR_%d_W%d" % (i, w))
         A("")
-        A("; 마릿수별 한 마리의 폭(=높이). VIEW_W / 마릿수.")
-        A("MonSprW:")
-        A("    db " + ", ".join(str(VIEW_W // n) for n in range(1, maxgrp + 1)))
+        A("; 마릿수별 배치. gfx/quest_geom.py 의 mon_layout 이 정한 값이다.")
+        for label, k, note in (("MonSprW", 2, "한 마리의 폭(=높이)"),
+                               ("MonColsTab", 0, "한 줄에 몇 칸"),
+                               ("MonTopTab", 3, "첫 줄의 윗변 y"),
+                               ("MonStepTab", 4, "줄 간격 (한 줄이면 0)")):
+            A("%s:%s; %s" % (label, " " * max(1, 13 - len(label)), note))
+            A("    db " + ", ".join(str(l[k]) for l in lay))
     A("")
 
     # ---- 이름 ----

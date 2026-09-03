@@ -139,9 +139,12 @@ PutChar:
     ld h, 0
     jr .hanmul
 .han2:
-    ld l, a                     ; 번호 = HAN_ESC + 이 바이트 (8 비트를 넘는다)
+    ; 번호 = HAN_ESC + (이 바이트 - 1). 굽는 쪽이 1 을 더해 두었다 - 안 그러면
+    ; 164 번 글자가 0xFF, 0x00 이 되는데 0x00 은 문자열 끝 표시라 이름이 거기서
+    ; 잘린다 (quest_msg.py 의 HAN_ESC_BIAS).
+    ld l, a
     ld h, 0
-    ld de, HAN_ESC
+    ld de, HAN_ESC - HAN_ESC_BIAS
     add hl, de
 .hanmul:
     add hl, hl
@@ -401,6 +404,10 @@ WaitVdpCmd:
 ;
 ; R#17 에 시작 번호를 넣고 포트 0x9B 로 쏟아부으면 레지스터가 자동으로 하나씩
 ; 올라간다. R#32~46 을 하나씩 쓰는 것보다 훨씬 짧다.
+;
+; **보내기 전에만 기다린다.** 다음 명령과는 부딪히지 않지만, 이 뒤에 CPU 로
+; VRAM 을 만지는 쪽은 스스로 기다려야 한다 - 부르는 쪽들이 SendVdpCmd 뒤에
+; WaitVdpCmd 를 붙이는 이유다.
 SendVdpCmd:
     push hl
     push bc
@@ -422,7 +429,8 @@ MsgClear:
     ld (CmdFirst), a
     ld hl, CmdClearAll
     ld b, 11
-    jp SendVdpCmd
+    call SendVdpCmd
+    jp WaitVdpCmd               ; 지우는 중에 글자를 찍으면 그 글자가 날아간다
 
 ;-----------------------------------------------------------------------------
 ; 한 줄 위로 민다. HMMM (VRAM 안에서 사각형 옮기기).
@@ -443,7 +451,16 @@ MsgScroll:
     ld (CmdFirst), a
     ld hl, CmdClearLast
     ld b, 11
-    jp SendVdpCmd
+    call SendVdpCmd
+    ; **여기서 기다린다.** 바로 뒤에 PutStr 이 CPU 로 새 줄을 찍는데, 맨 아랫줄
+    ; 지우기가 아직 도는 중이면 그 글자가 지우기에 먹힌다. 이 프레임에 던전을
+    ; 다시 그리게 되면 창 쪽 픽셀까지 흘려보낼 수 있다.
+    ;
+    ; (벽 한가운데에 천장 무늬 조각이 박힌 화면을 받았는데, 그 원인이 이것인지는
+    ;  **확인하지 못했다.** 프레임 덮기, 정면 벽 저장소, 기하 오라클을 다 봤지만
+    ;  재현이 안 됐다. 이 기다림은 그 부류를 막을 뿐 그 화면의 원인이라고
+    ;  단정하는 것이 아니다.)
+    jp WaitVdpCmd
 
 ; R#32 부터: SX, SY, DX, DY, NX, NY, CLR, ARG, CMD
 CmdScroll:
@@ -473,7 +490,8 @@ MenuClear:
     ld (CmdFirst), a
     ld hl, CmdClearMenu
     ld b, 11
-    jp SendVdpCmd
+    call SendVdpCmd
+    jp WaitVdpCmd
 
 CmdClearMenu:
     dw MSG_X
@@ -497,6 +515,16 @@ MsgReset:
     ld hl, MsgBuf
     ld (MsgPos), hl
     ld (hl), 0
+    ret
+
+; A = 글자 하나를 줄 버퍼에 붙인다. 한 글자만 넣으려고 표에 문자열을 만드는
+; 것보다 짧다 (섞인 무리 이름 사이의 '+' 처럼).
+MsgAddChar:
+    ld hl, (MsgPos)
+    ld (hl), a
+    inc hl
+    ld (hl), 0
+    ld (MsgPos), hl
     ret
 
 ; HL = 0 으로 끝나는 문자열을 줄 버퍼에 붙인다.

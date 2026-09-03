@@ -135,96 +135,114 @@ ClassSkill:
 ; AC, HP, 힘, 피해 개수/면, 무리 최대, 민첩, 그림, 이름 11
 MonsterTable:
     ; GOBLIN  <- monster.json (dnd 원본 Goblin)
-    db 15, 7, 8, 1, 6, 4, 14
-    db SPR_BANK_0_1
-    dw SPR_ADDR_0_1
+    db 15, 7, 8, 1, 6, 5, 14
+    db SPR_BANK_0_W96
+    dw SPR_ADDR_0_W96
     db 71, 79, 66, 76, 73, 78, 32, 32, 32, 32, 32
     ; SLIME   <- monster.json (dnd 원본 Ochre Jelly)
     db 8, 45, 15, 1, 6, 1, 6
-    db SPR_BANK_1_1
-    dw SPR_ADDR_1_1
+    db SPR_BANK_1_W96
+    dw SPR_ADDR_1_W96
     db 83, 76, 73, 77, 69, 32, 32, 32, 32, 32, 32
     ; DWARF   <- monster.json (dnd 원본 Guard)
     db 16, 11, 13, 1, 6, 4, 12
-    db SPR_BANK_2_1
-    dw SPR_ADDR_2_1
+    db SPR_BANK_2_W96
+    dw SPR_ADDR_2_W96
     db 68, 87, 65, 82, 70, 32, 32, 32, 32, 32, 32
     ; TROLL   <- monster.json (dnd 원본 Troll)
     db 15, 84, 18, 1, 6, 1, 13
-    db SPR_BANK_3_1
-    dw SPR_ADDR_3_1
+    db SPR_BANK_3_W96
+    dw SPR_ADDR_3_W96
     db 84, 82, 79, 76, 76, 32, 32, 32, 32, 32, 32
     ; COBRA   <- monster.json (dnd 원본 Giant Poisonous Snake)
-    db 14, 11, 10, 1, 6, 4, 18
-    db SPR_BANK_4_1
-    dw SPR_ADDR_4_1
+    db 14, 11, 10, 1, 6, 5, 18
+    db SPR_BANK_4_W96
+    dw SPR_ADDR_4_W96
     db 67, 79, 66, 82, 65, 32, 32, 32, 32, 32, 32
     ; MIMIC   <- monster.json (dnd 원본 Doppelganger)
     db 14, 52, 11, 1, 6, 1, 18
-    db SPR_BANK_5_1
-    dw SPR_ADDR_5_1
+    db SPR_BANK_5_W96
+    dw SPR_ADDR_5_W96
     db 77, 73, 77, 73, 67, 32, 32, 32, 32, 32, 32
 
-; 종류마다 1..4 마리일 때 쓸 그림. 색인은 종류*4 + (마릿수-1).
+; 종류마다 1..5 마리일 때 쓸 그림. 색인은 종류*5 + (마릿수-1).
 MonSprTab:
-    ; GOBLIN (무리 최대 4)
-    db SPR_BANK_0_1
-    dw SPR_ADDR_0_1
-    db SPR_BANK_0_2
-    dw SPR_ADDR_0_2
-    db SPR_BANK_0_3
-    dw SPR_ADDR_0_3
-    db SPR_BANK_0_4
-    dw SPR_ADDR_0_4
+    ; GOBLIN (무리 최대 5)
+    db SPR_BANK_0_W96
+    dw SPR_ADDR_0_W96
+    db SPR_BANK_0_W48
+    dw SPR_ADDR_0_W48
+    db SPR_BANK_0_W32
+    dw SPR_ADDR_0_W32
+    db SPR_BANK_0_W24
+    dw SPR_ADDR_0_W24
+    db SPR_BANK_0_W32
+    dw SPR_ADDR_0_W32
     ; SLIME (무리 최대 1)
-    db SPR_BANK_1_1
-    dw SPR_ADDR_1_1
-    db SPR_BANK_1_1
-    dw SPR_ADDR_1_1
-    db SPR_BANK_1_1
-    dw SPR_ADDR_1_1
-    db SPR_BANK_1_1
-    dw SPR_ADDR_1_1
+    db SPR_BANK_1_W96
+    dw SPR_ADDR_1_W96
+    db SPR_BANK_1_W96
+    dw SPR_ADDR_1_W96
+    db SPR_BANK_1_W96
+    dw SPR_ADDR_1_W96
+    db SPR_BANK_1_W96
+    dw SPR_ADDR_1_W96
+    db SPR_BANK_1_W96
+    dw SPR_ADDR_1_W96
     ; DWARF (무리 최대 4)
-    db SPR_BANK_2_1
-    dw SPR_ADDR_2_1
-    db SPR_BANK_2_2
-    dw SPR_ADDR_2_2
-    db SPR_BANK_2_3
-    dw SPR_ADDR_2_3
-    db SPR_BANK_2_4
-    dw SPR_ADDR_2_4
+    db SPR_BANK_2_W96
+    dw SPR_ADDR_2_W96
+    db SPR_BANK_2_W48
+    dw SPR_ADDR_2_W48
+    db SPR_BANK_2_W32
+    dw SPR_ADDR_2_W32
+    db SPR_BANK_2_W24
+    dw SPR_ADDR_2_W24
+    db SPR_BANK_2_W96
+    dw SPR_ADDR_2_W96
     ; TROLL (무리 최대 1)
-    db SPR_BANK_3_1
-    dw SPR_ADDR_3_1
-    db SPR_BANK_3_1
-    dw SPR_ADDR_3_1
-    db SPR_BANK_3_1
-    dw SPR_ADDR_3_1
-    db SPR_BANK_3_1
-    dw SPR_ADDR_3_1
-    ; COBRA (무리 최대 4)
-    db SPR_BANK_4_1
-    dw SPR_ADDR_4_1
-    db SPR_BANK_4_2
-    dw SPR_ADDR_4_2
-    db SPR_BANK_4_3
-    dw SPR_ADDR_4_3
-    db SPR_BANK_4_4
-    dw SPR_ADDR_4_4
+    db SPR_BANK_3_W96
+    dw SPR_ADDR_3_W96
+    db SPR_BANK_3_W96
+    dw SPR_ADDR_3_W96
+    db SPR_BANK_3_W96
+    dw SPR_ADDR_3_W96
+    db SPR_BANK_3_W96
+    dw SPR_ADDR_3_W96
+    db SPR_BANK_3_W96
+    dw SPR_ADDR_3_W96
+    ; COBRA (무리 최대 5)
+    db SPR_BANK_4_W96
+    dw SPR_ADDR_4_W96
+    db SPR_BANK_4_W48
+    dw SPR_ADDR_4_W48
+    db SPR_BANK_4_W32
+    dw SPR_ADDR_4_W32
+    db SPR_BANK_4_W24
+    dw SPR_ADDR_4_W24
+    db SPR_BANK_4_W32
+    dw SPR_ADDR_4_W32
     ; MIMIC (무리 최대 1)
-    db SPR_BANK_5_1
-    dw SPR_ADDR_5_1
-    db SPR_BANK_5_1
-    dw SPR_ADDR_5_1
-    db SPR_BANK_5_1
-    dw SPR_ADDR_5_1
-    db SPR_BANK_5_1
-    dw SPR_ADDR_5_1
+    db SPR_BANK_5_W96
+    dw SPR_ADDR_5_W96
+    db SPR_BANK_5_W96
+    dw SPR_ADDR_5_W96
+    db SPR_BANK_5_W96
+    dw SPR_ADDR_5_W96
+    db SPR_BANK_5_W96
+    dw SPR_ADDR_5_W96
+    db SPR_BANK_5_W96
+    dw SPR_ADDR_5_W96
 
-; 마릿수별 한 마리의 폭(=높이). VIEW_W / 마릿수.
-MonSprW:
-    db 96, 48, 32, 24
+; 마릿수별 배치. gfx/quest_geom.py 의 mon_layout 이 정한 값이다.
+MonSprW:      ; 한 마리의 폭(=높이)
+    db 96, 48, 32, 24, 32
+MonColsTab:   ; 한 줄에 몇 칸
+    db 1, 2, 3, 4, 3
+MonTopTab:    ; 첫 줄의 윗변 y
+    db 8, 32, 40, 44, 24
+MonStepTab:   ; 줄 간격 (한 줄이면 0)
+    db 0, 0, 0, 0, 40
 
 ; --- 이름. 자음/모음과 무늬. 무늬 길이가 곧 이름 길이(5~7)다 -----------
 NameCons:

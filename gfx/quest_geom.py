@@ -118,3 +118,32 @@ if __name__ == "__main__":
         tag = "근평면" if j == 0 else "z=%d" % j
         print("  경계 %d (%-6s): x %3d..%3d  y %3d..%3d  반폭 %2d"
               % (j, tag, r[0], r[2], r[1], r[3], HALF[j]))
+
+
+# ---------------------------------------------------------------------------
+# 전투 대열 - 무리를 창에 어떻게 세우는가
+#
+# **여기가 정본이다.** Z80 쪽(questmonrow.asm)은 quest_rules.py 가 여기서 구운
+# 표(MonSprW / MonColsTab / MonTopTab / MonStepTab)만 읽는다. 그리는 쪽과 고르는
+# 쪽이 각자 계산하면 반드시 어긋난다 - 실제로 칸 수를 두 군데서 정하다 하마터면
+# 지난 판의 값으로 감길 뻔했다.
+# ---------------------------------------------------------------------------
+ARROW_W, ARROW_H, ARROW_GAP = 12, 6, 2
+
+
+def mon_layout(n):
+    """n 마리 -> (칸 수, 줄 수, 한 마리 폭, 첫 줄 윗변 y, 줄 간격)
+
+    넷까지는 한 줄이다. 다섯이면 한 줄에 19 픽셀이 되어 알아볼 수 없으므로 두
+    줄(3 + 2)로 세운다. 96 은 1,2,3,4 로 나눠떨어지므로 칸이 딱 맞는다.
+
+    두 줄일 때는 줄마다 **위에 화살표 자리를 함께 잡는다.** 안 그러면 첫 줄
+    화살표가 창 밖으로 나가거나 둘째 줄 화살표가 첫 줄 몬스터를 덮는다.
+    """
+    cols, rows = (n, 1) if n <= 4 else ((n + 1) // 2, 2)
+    w = VIEW_W // cols
+    band = ARROW_H + ARROW_GAP
+    if rows == 1:
+        return cols, rows, w, VIEW_Y + (VIEW_H - w) // 2, 0
+    total = rows * w + rows * band
+    return cols, rows, w, VIEW_Y + (VIEW_H - total) // 2 + band, w + band

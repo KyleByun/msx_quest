@@ -13,6 +13,7 @@
 import io
 import os
 from PIL import Image
+import quest_geom as G
 from quest_pal import to332
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -132,6 +133,17 @@ BANK_BASE = 0xA000              # 실행 중에 걸리는 자리
 FIRST_BANK = 3                  # 0~2 는 본체 코드와 자료
 
 
+def sizes_for(grp, full):
+    """이 종류에게 필요한 그림 크기들. 큰 것부터.
+
+    4bpp(SCREEN 5)는 대열을 안 쓰므로 원래 크기 하나뿐이다. 한 바이트에 픽셀이
+    둘이라 폭이 홀수 바이트가 되는 크기가 생기기도 한다.
+    """
+    if BPP != 8:
+        return [full]
+    return sorted({G.mon_layout(n)[2] for n in range(1, grp + 1)}, reverse=True)
+
+
 def build_banks(pal, nearest):
     """그림을 8KB 뱅크에 나눠 담는다.
 
@@ -150,32 +162,27 @@ def build_banks(pal, nearest):
     """
     global W, H
     full = W
-    blobs = []                  # (라벨, 자료, 몬스터 번호, 마릿수)
+    blobs = []                  # (라벨, 자료, 몬스터 번호, 크기)
     for i, (f, name, grp) in enumerate(SPRITES):
-        for n in (range(1, grp + 1) if BPP == 8 else (1,)):
-            if full % n:
-                raise SystemExit(
-                    "%s 의 무리 최대가 %d 인데 그림 %d 픽셀이 %d 로 나눠떨어지지\n"
-                    "  않는다. monster.json 의 group_max 를 %d 의 약수로 두세요."
-                    % (name, grp, full, n, full))
-            W = H = full // n
+        for size in sizes_for(grp, full):
+            W = H = size
             im = load(f)
             assert im.size == (W, H), (f, im.size)
-            blobs.append(("Spr%s%d" % (name.capitalize(), n),
-                          to_runs_linear(im, pal, nearest), i, n))
+            blobs.append(("Spr%s%d" % (name.capitalize(), size),
+                          to_runs_linear(im, pal, nearest), i, size))
     W = H = full
 
     banks = [[]]
     used = [0]
-    place = {}                  # (몬스터 번호, 마릿수) -> (뱅크 번호, 주소)
-    for label, data, i, n in blobs:
+    place = {}                  # (몬스터 번호, 크기) -> (뱅크 번호, 주소)
+    for label, data, i, size in blobs:
         if used[-1] + len(data) > BANK_SIZE:
             banks.append([])
             used.append(0)
         bi = len(banks) - 1
-        place[(i, n)] = (FIRST_BANK + bi, BANK_BASE + used[bi])
-        banks[bi].append("%s:                ; %s 를 %d 마리로 나눌 때  %d 바이트"
-                         % (label, SPRITES[i][1], n, len(data)))
+        place[(i, size)] = (FIRST_BANK + bi, BANK_BASE + used[bi])
+        banks[bi].append("%s:                ; %s 를 %d 픽셀로  %d 바이트"
+                         % (label, SPRITES[i][1], size, len(data)))
         for k in range(0, len(data), 16):
             banks[bi].append("    db " + ", ".join("0x%02X" % b for b in data[k:k + 16]))
         used[bi] += len(data)
@@ -189,10 +196,10 @@ def build_banks(pal, nearest):
               "SPR_H        equ %d" % full,
               "SPR_BANKS    equ %d" % len(banks),
               "SPR_FIRSTBK  equ %d" % FIRST_BANK]
-    for (i, n), (bk, ad) in sorted(place.items()):
-        consts.append("SPR_BANK_%d_%d equ %d                  ; %s x%d"
-                      % (i, n, bk, SPRITES[i][1], n))
-        consts.append("SPR_ADDR_%d_%d equ 0x%04X" % (i, n, ad))
+    for (i, size), (bk, ad) in sorted(place.items()):
+        consts.append("SPR_BANK_%d_W%d equ %d                  ; %s %dpx"
+                      % (i, size, bk, SPRITES[i][1], size))
+        consts.append("SPR_ADDR_%d_W%d equ 0x%04X" % (i, size, ad))
     for bi in range(len(banks)):
         consts.append("; 뱅크 %d: %d / %d 바이트" % (FIRST_BANK + bi, used[bi], BANK_SIZE))
     return banks, consts

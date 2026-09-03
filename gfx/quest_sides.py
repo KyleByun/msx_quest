@@ -16,6 +16,7 @@
 
 가운데에서 verify_quest_sides.ps1 이 openMSX 를 케이스마다 한 번씩 돌린다.
 """
+import io
 import os
 import sys
 
@@ -236,9 +237,57 @@ def face_widths():
     return out
 
 
+# ---------------------------------------------------------------------------
+# 무작위 지도로 훑기
+#
+# 손으로 고른 일곱 자리는 옆면의 세 갈래를 고루 밟지만, 지도는 그것 말고도 많다.
+# 화면에 벽 대신 천장 무늬 한 조각이 박힌 스크린샷이 나왔는데 일곱 자리에서는
+# 안 나왔다. 그래서 지도를 무작위로 만들어 같은 오라클에 먹인다.
+#
+# 만든 목록은 작업폴더의 fuzz.json 에 남긴다 - tcl 을 굽는 쪽과 견주는 쪽이
+# **같은 지도**를 봐야 하는데, 매번 새로 뽑으면 서로 다른 것을 보게 된다.
+FUZZ_N = 24
+
+
+def fuzz_path(outdir):
+    return os.path.join(outdir, "fuzz.json")
+
+
+def load_cases(outdir):
+    """fuzz.json 이 있으면 그것을, 없으면 손으로 고른 CASES 를 쓴다."""
+    import json
+    p = fuzz_path(outdir)
+    if not os.path.exists(p):
+        return CASES
+    d = json.load(open(p, encoding="utf-8"))
+    return dict((k, (v[0], v[1], v[2], v[3])) for k, v in sorted(d.items()))
+
+
+def make_fuzz(outdir, n=FUZZ_N, seed=1):
+    import json
+    import random
+    rnd = random.Random(seed)
+    out = {}
+    for i in range(n):
+        # 가장자리는 벽으로 두고 안쪽만 뽑는다. 뚫린 비율을 케이스마다 달리해
+        # 좁은 통로부터 넓은 방까지 나오게 한다.
+        openp = 0.25 + 0.45 * (i % 4) / 3.0
+        g = [['#'] * 16 for _ in range(16)]
+        for y in range(1, 15):
+            for x in range(1, 15):
+                if rnd.random() < openp:
+                    g[y][x] = '.'
+        px, py = rnd.randrange(2, 14), rnd.randrange(2, 14)
+        g[py][px] = '.'                     # 서 있는 칸은 반드시 뚫려 있어야 한다
+        out["f%02d" % i] = ["".join(r) for r in g], px, py, rnd.randrange(4)
+    with io.open(fuzz_path(outdir), "w", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps(out, indent=1) + "\n")
+    print("wrote %d fuzz cases" % n)
+
+
 def write_tcl(outdir):
     s = syms()
-    for name, (grid, px, py, f) in CASES.items():
+    for name, (grid, px, py, f) in load_cases(outdir).items():
         w = ["debug write memory %d %d" % (s["MapDataRam"] + y * 16 + x,
                                            1 if grid[y][x] == '#' else 0)
              for y in range(16) for x in range(16)]
@@ -270,7 +319,7 @@ def write_tcl(outdir):
              "after time 9.0 { exit }"]
         open(os.path.join(outdir, name + ".tcl"), "w",
              encoding="ascii", newline="\n").write("\n".join(L) + "\n")
-    print("wrote %d tcl scripts to %s" % (len(CASES), outdir))
+    print("wrote %d tcl scripts to %s" % (len(load_cases(outdir)), outdir))
 
 
 def check(outdir):
@@ -281,7 +330,7 @@ def check(outdir):
     front = C.build_front(PAL)          # (픽셀, HMMM 명령, 올리기 표)
     widths = face_widths()
     bad = 0
-    for name, (grid, px, py, f) in CASES.items():
+    for name, (grid, px, py, f) in load_cases(outdir).items():
         vis, post, block = expect_tables(grid, px, py, f, widths)
         dump = open(os.path.join(outdir, name + ".dump"), encoding="utf-8").read().split("\n")
         gx, gy, gf = (int(v) for v in dump[0].replace("pos", "").replace("facing", "").split())
@@ -310,4 +359,6 @@ def check(outdir):
 
 if __name__ == "__main__":
     mode, outdir = sys.argv[1], sys.argv[2]
+    if mode == "fuzz":
+        sys.exit(make_fuzz(outdir))
     sys.exit(write_tcl(outdir) if mode == "tcl" else check(outdir))
