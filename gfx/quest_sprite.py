@@ -39,14 +39,19 @@ def set_mode(bpp, size, pre):
     assert bpp in (4, 8), bpp
     BPP, W, H, PRE = bpp, size, size, pre
 
-# 그림 -> 표시 이름. 수치는 quest_rules.py 가 monster_stats.py 에서 가져온다.
+# 그림 -> (표시 이름, 무리 최대). 수치는 quest_rules.py 가 monster.json 에서 준다.
+#
+# 무리 최대가 왜 여기까지 오는가: 두 마리가 길을 막으면 화면에 두 마리를 나란히
+# 놓아야 하고, 그러려면 한 마리를 절반 폭으로 줄인 그림이 있어야 한다. 줄이는
+# 것은 실행 중에 하지 않고 **여기서 미리 굽는다** - 원본이 64x64 라 여기서
+# 줄이면 LANCZOS 로 곱게 줄고, Z80 은 그리기만 하면 된다.
 SPRITES = [
-    ("02_goblin.png", "GOBLIN"),
-    ("03_slime.png", "SLIME"),
-    ("04_dwarf.png", "DWARF"),
-    ("06_troll.png", "TROLL"),
-    ("23_cobra.png", "COBRA"),
-    ("41_mimic.png", "MIMIC"),
+    ("02_goblin.png", "GOBLIN", 4),
+    ("03_slime.png", "SLIME", 1),
+    ("04_dwarf.png", "DWARF", 4),
+    ("06_troll.png", "TROLL", 1),
+    ("23_cobra.png", "COBRA", 4),
+    ("41_mimic.png", "MIMIC", 1),
 ]
 
 ALPHA_MIN = 128         # 이보다 흐리면 투명으로 본다
@@ -133,27 +138,46 @@ def build_banks(pal, nearest):
     한 장이 뱅크 경계를 넘으면 그리다가 뱅크를 바꿔야 해서 복잡해진다. 그래서
     들어갈 만큼만 담고 넘치면 다음 뱅크로 통째로 넘긴다.
 
+    종류마다 **1..무리최대 마릿수의 축소본**을 함께 굽는다. n 마리가 나오면
+    한 마리를 W/n 폭으로 그려 나란히 놓는다. 실측으로 늘어나는 것은 6,849
+    바이트뿐이다 - 축소본은 픽셀이 1/n^2 이고, 무리로 나오는 종류는 여섯 중
+    셋(고블린/드워프/코브라)뿐이라서다.
+
+    4bpp(SCREEN 5)는 대열을 쓰지 않으므로 원래 크기 하나만 굽는다. 한 바이트에
+    픽셀이 둘이라 W/3 = 21.3 처럼 바이트로 안 떨어지는 크기가 생긴다.
+
     돌려주는 것: (뱅크별 asm 줄 목록, 상수 줄 목록)
     """
-    blobs = []
-    for f, name in SPRITES:
-        im = load(f)
-        assert im.size == (W, H), (f, im.size)
-        blobs.append((name, to_runs_linear(im, pal, nearest)))
+    global W, H
+    full = W
+    blobs = []                  # (라벨, 자료, 몬스터 번호, 마릿수)
+    for i, (f, name, grp) in enumerate(SPRITES):
+        for n in (range(1, grp + 1) if BPP == 8 else (1,)):
+            if full % n:
+                raise SystemExit(
+                    "%s 의 무리 최대가 %d 인데 그림 %d 픽셀이 %d 로 나눠떨어지지\n"
+                    "  않는다. monster.json 의 group_max 를 %d 의 약수로 두세요."
+                    % (name, grp, full, n, full))
+            W = H = full // n
+            im = load(f)
+            assert im.size == (W, H), (f, im.size)
+            blobs.append(("Spr%s%d" % (name.capitalize(), n),
+                          to_runs_linear(im, pal, nearest), i, n))
+    W = H = full
 
     banks = [[]]
     used = [0]
-    place = []                  # (뱅크 번호, 주소)
-    for name, data in blobs:
+    place = {}                  # (몬스터 번호, 마릿수) -> (뱅크 번호, 주소)
+    for label, data, i, n in blobs:
         if used[-1] + len(data) > BANK_SIZE:
             banks.append([])
             used.append(0)
         bi = len(banks) - 1
-        place.append((FIRST_BANK + bi, BANK_BASE + used[bi]))
-        banks[bi].append("Spr%s:                ; %s  %d 바이트"
-                         % (name.capitalize(), name, len(data)))
-        for i in range(0, len(data), 16):
-            banks[bi].append("    db " + ", ".join("0x%02X" % b for b in data[i:i + 16]))
+        place[(i, n)] = (FIRST_BANK + bi, BANK_BASE + used[bi])
+        banks[bi].append("%s:                ; %s 를 %d 마리로 나눌 때  %d 바이트"
+                         % (label, SPRITES[i][1], n, len(data)))
+        for k in range(0, len(data), 16):
+            banks[bi].append("    db " + ", ".join("0x%02X" % b for b in data[k:k + 16]))
         used[bi] += len(data)
 
     for bi in range(len(banks)):
@@ -161,14 +185,14 @@ def build_banks(pal, nearest):
         banks[bi].append('    SAVEBIN "build/%sspr%d.bin", 0x%04X, %d'
                          % (PRE, bi, BANK_BASE, BANK_SIZE))
 
-    consts = ["SPR_W        equ %d" % W,
-              "SPR_H        equ %d" % H,
+    consts = ["SPR_W        equ %d" % full,
+              "SPR_H        equ %d" % full,
               "SPR_BANKS    equ %d" % len(banks),
               "SPR_FIRSTBK  equ %d" % FIRST_BANK]
-    for i, (name, _) in enumerate(blobs):
-        bk, ad = place[i]
-        consts.append("SPR_BANK_%d   equ %d                  ; %s" % (i, bk, name))
-        consts.append("SPR_ADDR_%d   equ 0x%04X" % (i, ad))
+    for (i, n), (bk, ad) in sorted(place.items()):
+        consts.append("SPR_BANK_%d_%d equ %d                  ; %s x%d"
+                      % (i, n, bk, SPRITES[i][1], n))
+        consts.append("SPR_ADDR_%d_%d equ 0x%04X" % (i, n, ad))
     for bi in range(len(banks)):
         consts.append("; 뱅크 %d: %d / %d 바이트" % (FIRST_BANK + bi, used[bi], BANK_SIZE))
     return banks, consts

@@ -258,6 +258,7 @@ def db_sbytes(vals):
 # 팔레트는 gfx/quest_pal.py 가 정본이다. 예전에는 여기에 같은 값을 다시 적어
 # 두고 "quest_convert.py 와 같아야 한다"는 주석만 달았는데, 한쪽만 고치면 조용히
 # 어긋난다.
+from quest_geom import VIEW_W
 from quest_pal import PAL333
 
 
@@ -484,9 +485,45 @@ def main():
         A("    db %d, %d, %d, %d, %d, %d, %d" % (m["ac"], min(255, m["hp"]), m["str"],
                                                  m["dcnt"], m["dside"], m["grp"],
                                                  m["dex"]))
-        A("    db SPR_BANK_%d" % i)
-        A("    dw SPR_ADDR_%d" % i)
+        A("    db SPR_BANK_%d_1" % i)
+        A("    dw SPR_ADDR_%d_1" % i)
         A(db_str(pad(m["name"], 11)))
+    A("")
+
+    # ---- 대열용 축소본 표 ----
+    #
+    # n 마리가 나오면 한 마리를 VIEW_W/n 폭으로 그려 나란히 놓는다. 종류마다
+    # n = 1..MON_SCALE_N 의 (뱅크, 주소) 를 늘어놓아 asm 이 곱셈 없이 찾는다.
+    # 무리 최대를 넘는 자리는 한 마리짜리를 되풀이한다 - 닿을 일이 없지만
+    # 값이 깨졌을 때 빈 뱅크를 가리키는 것보다 낫다.
+    #
+    # 4bpp 는 대열을 쓰지 않으므로 표를 내지 않는다 (quest_sprite.py 참고).
+    if BPP == 8:
+        maxgrp = max(m["grp"] for m in R["monsters"])
+        for n in range(1, maxgrp + 1):
+            if VIEW_W % n:
+                sys.exit("무리 최대가 %d 인데 뷰포트 폭 %d 가 %d 로 나눠떨어지지 "
+                         "않는다.\n  monster.json 의 group_max 를 %d 의 약수로 "
+                         "두세요." % (maxgrp, VIEW_W, n, VIEW_W))
+        to_const()
+        A("; --- 대열 (몬스터 여럿을 나란히) --------------------------------------")
+        A("MON_SCALE_N  equ %d                 ; 한 줄에 몇 마리까지 세우는가"
+          % maxgrp)
+        A("MON_SCALE_ST equ 3                 ; 한 칸 = 뱅크 1 + 주소 2")
+        to_data()
+        A("; 종류마다 1..%d 마리일 때 쓸 그림. 색인은 종류*%d + (마릿수-1)."
+          % (maxgrp, maxgrp))
+        A("MonSprTab:")
+        for i, m in enumerate(R["monsters"]):
+            A("    ; %s (무리 최대 %d)" % (m["name"], m["grp"]))
+            for n in range(1, maxgrp + 1):
+                k = n if n <= m["grp"] else 1
+                A("    db SPR_BANK_%d_%d" % (i, k))
+                A("    dw SPR_ADDR_%d_%d" % (i, k))
+        A("")
+        A("; 마릿수별 한 마리의 폭(=높이). VIEW_W / 마릿수.")
+        A("MonSprW:")
+        A("    db " + ", ".join(str(VIEW_W // n) for n in range(1, maxgrp + 1)))
     A("")
 
     # ---- 이름 ----
@@ -512,7 +549,7 @@ def main():
 
     # ---- 몬스터 그림을 ROM 뱅크로 굽는다 --------------------------------
     import quest_sprite as SP
-    SP.SPRITES = [(m["img"], m["name"]) for m in R["monsters"]]
+    SP.SPRITES = [(m["img"], m["name"], m["grp"]) for m in R["monsters"]]
     SP.set_mode(BPP, SPR_SIZE, PRE)
     banks, spr_const = SP.build_banks(PAL333, nearest_idx)
     to_const()

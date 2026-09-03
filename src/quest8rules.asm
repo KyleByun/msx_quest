@@ -100,6 +100,9 @@ T_DEX        equ 6                 ; 민첩 - 라운드당 행동 횟수를 정�
 T_SPRBANK    equ 7                 ; 그림이 든 ROM 뱅크
 T_SPRADDR    equ 8                 ; 그 뱅크 안의 주소
 T_NAME       equ 10
+; --- 대열 (몬스터 여럿을 나란히) --------------------------------------
+MON_SCALE_N  equ 4                 ; 한 줄에 몇 마리까지 세우는가
+MON_SCALE_ST equ 3                 ; 한 칸 = 뱅크 1 + 주소 2
 NAME_CONS_N  equ 15
 NAME_VOW_N   equ 5
 NAME_PAT_N   equ 6
@@ -111,22 +114,41 @@ HERO_BASE_AC equ 12
 ; --- 몬스터 그림이 어느 뱅크 어디에 있는가 -----------------------------
 SPR_W        equ 96
 SPR_H        equ 96
-SPR_BANKS    equ 5
+SPR_BANKS    equ 6
 SPR_FIRSTBK  equ 3
-SPR_BANK_0   equ 3                  ; GOBLIN
-SPR_ADDR_0   equ 0xA000
-SPR_BANK_1   equ 3                  ; SLIME
-SPR_ADDR_1   equ 0xAB4E
-SPR_BANK_2   equ 4                  ; DWARF
-SPR_ADDR_2   equ 0xA000
-SPR_BANK_3   equ 5                  ; TROLL
-SPR_ADDR_3   equ 0xA000
-SPR_BANK_4   equ 6                  ; COBRA
-SPR_ADDR_4   equ 0xA000
-SPR_BANK_5   equ 7                  ; MIMIC
-SPR_ADDR_5   equ 0xA000
-; 뱅크 3: 7664 / 8192 바이트
-; 뱅크 4: 5570 / 8192 바이트
-; 뱅크 5: 5821 / 8192 바이트
-; 뱅크 6: 5827 / 8192 바이트
-; 뱅크 7: 6175 / 8192 바이트
+SPR_BANK_0_1 equ 3                  ; GOBLIN x1
+SPR_ADDR_0_1 equ 0xA000
+SPR_BANK_0_2 equ 3                  ; GOBLIN x2
+SPR_ADDR_0_2 equ 0xAB4E
+SPR_BANK_0_3 equ 3                  ; GOBLIN x3
+SPR_ADDR_0_3 equ 0xAE7B
+SPR_BANK_0_4 equ 3                  ; GOBLIN x4
+SPR_ADDR_0_4 equ 0xB00F
+SPR_BANK_1_1 equ 4                  ; SLIME x1
+SPR_ADDR_1_1 equ 0xA000
+SPR_BANK_2_1 equ 5                  ; DWARF x1
+SPR_ADDR_2_1 equ 0xA000
+SPR_BANK_2_2 equ 5                  ; DWARF x2
+SPR_ADDR_2_2 equ 0xB5C2
+SPR_BANK_2_3 equ 5                  ; DWARF x3
+SPR_ADDR_2_3 equ 0xBBA4
+SPR_BANK_2_4 equ 6                  ; DWARF x4
+SPR_ADDR_2_4 equ 0xA000
+SPR_BANK_3_1 equ 6                  ; TROLL x1
+SPR_ADDR_3_1 equ 0xA1AE
+SPR_BANK_4_1 equ 7                  ; COBRA x1
+SPR_ADDR_4_1 equ 0xA000
+SPR_BANK_4_2 equ 7                  ; COBRA x2
+SPR_ADDR_4_2 equ 0xB6C3
+SPR_BANK_4_3 equ 7                  ; COBRA x3
+SPR_ADDR_4_3 equ 0xBCD9
+SPR_BANK_4_4 equ 8                  ; COBRA x4
+SPR_ADDR_4_4 equ 0xA000
+SPR_BANK_5_1 equ 8                  ; MIMIC x1
+SPR_ADDR_5_1 equ 0xA1B3
+; 뱅크 3: 4354 / 8192 바이트
+; 뱅크 4: 4770 / 8192 바이트
+; 뱅크 5: 7800 / 8192 바이트
+; 뱅크 6: 6251 / 8192 바이트
+; 뱅크 7: 8121 / 8192 바이트
+; 뱅크 8: 6610 / 8192 바이트

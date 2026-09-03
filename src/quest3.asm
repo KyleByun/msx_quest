@@ -227,6 +227,19 @@ SprRows     ds 1
 SprCol      ds 1
 SprLen      ds 1
 
+; 대열 (questmonrow.asm). 무리를 여러 마리로 세우고 칠 상대를 고르는 데 쓴다.
+MonSel      ds 1                ; 화살표가 가리키는 칸
+MonDied     ds 1                ; 이번 차례에 누가 쓰러졌나 (대열을 다시 그린다)
+MonRowN     ds 1                ; 세워 둔 칸 수
+MonRowI     ds 1                ; 그리는 동안의 칸 번호
+MonRowW     ds 1                ; 한 칸의 폭(=높이)
+MonRowX     ds 1                ; 지금 그리는 칸의 왼쪽 끝
+MonRowY     ds 1                ; 대열의 윗줄
+MonRowPtr   ds 2                ; 이 크기의 그림 자료
+ArrowX      ds 1
+ArrowY      ds 1
+CmdBuf      ds 15               ; y 를 갈아 끼운 VDP 명령 블록
+
 ; 전투 진행
 MonCount    ds 1                ; 이번에 나온 마릿수
 MonKind     ds 1                ; 나온 종류 (한 무리는 한 종류다)
@@ -423,11 +436,10 @@ MainLoop:
     xor a
     ld (needDraw), a
     call RenderDungeon
-    ld a, (BattleOn)            ; 전투 중이면 그 위에 몬스터를 얹는다.
+    ld a, (BattleOn)            ; 전투 중이면 그 위에 무리를 얹는다.
     or a                        ; 던전을 먼저 그려야 지난 그림이 지워진다.
     jr z, .idle
-    ld a, (MonKind)
-    call DrawMonsterPic
+    call DrawMonsterRow
 .idle:
     call ReadInput
     call HandleInput
@@ -1887,6 +1899,9 @@ WriteVdpReg:
     include "src/questparty.asm"
     include "src/questfight.asm"
     include "src/questmon.asm"
+    IFDEF SCREEN8
+    include "src/questmonrow.asm"   ; 대열 - 4bpp 에는 축소본이 없다
+    ENDIF
     include "src/questlevel.asm"
     include "src/questmap.asm"
     IFDEF TITLE

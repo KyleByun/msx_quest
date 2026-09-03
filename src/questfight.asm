@@ -266,7 +266,11 @@ HeroAttack:
     or a
     ret z                       ; 쓰러진 사람은 지나간다
 
+    IFDEF SCREEN8
+    call PickTarget             ; 대열에서 고른다 (하나뿐이면 묻지 않는다)
+    ELSE
     call FirstMonster
+    ENDIF
     ret c
     ld (TmpType), a             ; 맞는 몬스터 번호
     call MonPtr
@@ -335,6 +339,10 @@ DamageMonster:
     cp c
     jr c, .hurt
     ld (hl), 0                  ; 쓰러졌다
+    IFDEF SCREEN8
+    ld a, 1                     ; 대열에서 지우려면 던전부터 다시 그려야 한다
+    ld (MonDied), a
+    ENDIF
     ld a, (TmpType)
     call MsgAddMonName
     ld a, MSG_DIES
@@ -507,6 +515,9 @@ BattleRound:
     ld a, (TurnHero)
     call AskCommand             ; A = 고른 명령, MenuHero = 그 사람
     call DoCommand
+    IFDEF SCREEN8
+    call MonDiedRedraw          ; 쓰러진 놈을 대열에서 지운다
+    ENDIF
     ld a, (FleeDone)
     or a
     jp nz, .roundend            ; 도망쳤으면 남은 차례는 없다
@@ -1002,6 +1013,10 @@ StartBattle:
     ld a, 1
     ld (BattleOn), a
     ld (RoundNo), a
+    IFDEF SCREEN8
+    xor a                       ; 지난 판의 마지막 한 마리가 남겨 놓은 표시를
+    ld (MonDied), a             ; 지운다. 안 지우면 첫 명령에 헛되이 다시 그린다.
+    ENDIF
     call MakeEncounter
     ; 미니맵과 전투 기록은 **같은 양피지 자리**를 쓴다. 지도를 켜 둔 채로 싸우면
     ; 지도가 글자를 덮어 "1 TROLL" 이 "1" 만 남는다(x=144 부터 지도가 가린다).

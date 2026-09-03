@@ -136,34 +136,35 @@ ClassSkill:
 MonsterTable:
     ; GOBLIN  <- monster.json (dnd 원본 Goblin)
     db 15, 7, 8, 1, 6, 4, 14
-    db SPR_BANK_0
-    dw SPR_ADDR_0
+    db SPR_BANK_0_1
+    dw SPR_ADDR_0_1
     db 71, 79, 66, 76, 73, 78, 32, 32, 32, 32, 32
     ; SLIME   <- monster.json (dnd 원본 Ochre Jelly)
     db 8, 45, 15, 1, 6, 1, 6
-    db SPR_BANK_1
-    dw SPR_ADDR_1
+    db SPR_BANK_1_1
+    dw SPR_ADDR_1_1
     db 83, 76, 73, 77, 69, 32, 32, 32, 32, 32, 32
     ; DWARF   <- monster.json (dnd 원본 Guard)
     db 16, 11, 13, 1, 6, 4, 12
-    db SPR_BANK_2
-    dw SPR_ADDR_2
+    db SPR_BANK_2_1
+    dw SPR_ADDR_2_1
     db 68, 87, 65, 82, 70, 32, 32, 32, 32, 32, 32
     ; TROLL   <- monster.json (dnd 원본 Troll)
     db 15, 84, 18, 1, 6, 1, 13
-    db SPR_BANK_3
-    dw SPR_ADDR_3
+    db SPR_BANK_3_1
+    dw SPR_ADDR_3_1
     db 84, 82, 79, 76, 76, 32, 32, 32, 32, 32, 32
     ; COBRA   <- monster.json (dnd 원본 Giant Poisonous Snake)
     db 14, 11, 10, 1, 6, 4, 18
-    db SPR_BANK_4
-    dw SPR_ADDR_4
+    db SPR_BANK_4_1
+    dw SPR_ADDR_4_1
     db 67, 79, 66, 82, 65, 32, 32, 32, 32, 32, 32
     ; MIMIC   <- monster.json (dnd 원본 Doppelganger)
     db 14, 52, 11, 1, 6, 1, 18
-    db SPR_BANK_5
-    dw SPR_ADDR_5
+    db SPR_BANK_5_1
+    dw SPR_ADDR_5_1
     db 77, 73, 77, 73, 67, 32, 32, 32, 32, 32, 32
+
 
 ; --- 이름. 자음/모음과 무늬. 무늬 길이가 곧 이름 길이(5~7)다 -----------
 NameCons:
