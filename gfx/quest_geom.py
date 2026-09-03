@@ -130,6 +130,31 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 ARROW_W, ARROW_H, ARROW_GAP = 12, 6, 2
 
+# 한 마리만 나올 때는 창을 꽉 채우지 않는다. 96 을 다 쓰면 트롤처럼 큰 그림이
+# 테두리에 닿아 답답하고, 던전 안이 아니라 그림 한 장처럼 보인다. 75% 로 줄여
+# 가운데에 세우면 둘레에 12 픽셀씩 남아 창 안에 서 있는 것으로 읽힌다.
+MON_ONE_PCT = 75
+
+# 몬스터 발아래 HP 게이지. 점 다섯 개로 20% 씩 보여 준다.
+#
+# 화살표 띠를 줄 **위에** 잡아 두는 것과 같은 이유로 점 띠도 줄 **아래에**
+# 자리를 잡아 둔다. 안 그러면 두 줄일 때 첫 줄의 점이 둘째 줄 화살표와 겹친다.
+# 점 폭이 4 면 네 마리일 때 점 줄(24)이 칸 폭(24)과 같아져 옆 칸 점과 맞닿아
+# 한 줄짜리 빨간 띠로 보인다. 3 으로 줄여 양옆에 여백을 남긴다.
+DOT_N, DOT_W, DOT_H, DOT_GAP, DOT_TOP = 5, 3, 4, 1, 2
+DOT_STRIP = DOT_TOP + DOT_H
+DOT_ROW_W = DOT_N * DOT_W + (DOT_N - 1) * DOT_GAP
+
+
+def mon_left(n):
+    """대열 전체를 창 가운데에 놓기 위한 왼쪽 x.
+
+    칸 수 x 폭이 창 폭보다 좁을 수 있다(한 마리일 때가 그렇다). 그리는 쪽과
+    고르는 쪽이 각자 더하면 어긋나므로 여기서 한 번만 정하고 표로 굽는다.
+    """
+    cols, _rows, w, _top, _step = mon_layout(n)
+    return VIEW_X + (VIEW_W - cols * w) // 2
+
 
 def mon_layout(n):
     """n 마리 -> (칸 수, 줄 수, 한 마리 폭, 첫 줄 윗변 y, 줄 간격)
@@ -141,9 +166,10 @@ def mon_layout(n):
     화살표가 창 밖으로 나가거나 둘째 줄 화살표가 첫 줄 몬스터를 덮는다.
     """
     cols, rows = (n, 1) if n <= 4 else ((n + 1) // 2, 2)
-    w = VIEW_W // cols
+    w = VIEW_W * MON_ONE_PCT // 100 if n == 1 else VIEW_W // cols
     band = ARROW_H + ARROW_GAP
     if rows == 1:
-        return cols, rows, w, VIEW_Y + (VIEW_H - w) // 2, 0
-    total = rows * w + rows * band
-    return cols, rows, w, VIEW_Y + (VIEW_H - total) // 2 + band, w + band
+        return cols, rows, w, VIEW_Y + (VIEW_H - w - DOT_STRIP) // 2, 0
+    total = rows * (w + band + DOT_STRIP)
+    return (cols, rows, w, VIEW_Y + (VIEW_H - total) // 2 + band,
+            w + band + DOT_STRIP)

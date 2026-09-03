@@ -486,8 +486,11 @@ def main():
         A("    db %d, %d, %d, %d, %d, %d, %d" % (m["ac"], min(255, m["hp"]), m["str"],
                                                  m["dcnt"], m["dside"], m["grp"],
                                                  m["dex"]))
-        A("    db SPR_BANK_%d_W%d" % (i, SPR_SIZE))
-        A("    dw SPR_ADDR_%d_W%d" % (i, SPR_SIZE))
+        # 한 마리일 때 쓰는 그림. 8bpp 는 대열이 정하는 폭(창의 75%)이고,
+        # 4bpp 는 대열을 안 써서 원본 크기 그대로다.
+        w1 = G.mon_layout(1)[2] if BPP == 8 else SPR_SIZE
+        A("    db SPR_BANK_%d_W%d" % (i, w1))
+        A("    dw SPR_ADDR_%d_W%d" % (i, w1))
         A(db_str(pad(m["name"], 11)))
     A("")
 
@@ -511,10 +514,16 @@ def main():
             if n > 1 and top - band < G.VIEW_Y:
                 bad.append("%d 마리일 때 화살표가 창 위로 %d 픽셀 넘어간다"
                            % (n, G.VIEW_Y - (top - band)))
-            bottom = top + (rows - 1) * step + w
+            bottom = top + (rows - 1) * step + w + G.DOT_STRIP
             if bottom > G.VIEW_Y + G.VIEW_H:
-                bad.append("%d 마리일 때 대열이 창 아래로 %d 픽셀 넘어간다"
+                bad.append("%d 마리일 때 대열(+점 띠)이 창 아래로 %d 픽셀 넘어간다"
                            % (n, bottom - (G.VIEW_Y + G.VIEW_H)))
+            if cols * w > VIEW_W:
+                bad.append("%d 마리는 %d 칸 x %d 픽셀이라 창 폭 %d 를 넘는다"
+                           % (n, cols, w, VIEW_W))
+            if G.DOT_ROW_W > w:
+                bad.append("%d 마리일 때 칸이 %d 픽셀인데 점 줄이 %d 다"
+                           % (n, w, G.DOT_ROW_W))
             if G.ARROW_W > w:
                 bad.append("%d 마리일 때 칸이 %d 픽셀인데 화살표가 %d 다"
                            % (n, w, G.ARROW_W))
@@ -532,6 +541,12 @@ def main():
         A("ARROW_W      equ %d" % G.ARROW_W)
         A("ARROW_H      equ %d" % G.ARROW_H)
         A("ARROW_GAP    equ %d                 ; 화살표 끝과 머리 사이" % G.ARROW_GAP)
+        A("DOT_N        equ %d                 ; HP 게이지 점 수 (하나가 20%%)" % G.DOT_N)
+        A("DOT_W        equ %d" % G.DOT_W)
+        A("DOT_H        equ %d" % G.DOT_H)
+        A("DOT_GAP      equ %d" % G.DOT_GAP)
+        A("DOT_TOP      equ %d                 ; 몬스터 아랫변과 점 사이" % G.DOT_TOP)
+        A("DOT_ROW_W    equ %d                ; 점 다섯 줄의 폭" % G.DOT_ROW_W)
         to_data()
         A("; 종류마다 1..%d 마리일 때 쓸 그림. 색인은 종류*%d + (마릿수-1)."
           % (maxgrp, maxgrp))
@@ -550,6 +565,8 @@ def main():
                                ("MonStepTab", 4, "줄 간격 (한 줄이면 0)")):
             A("%s:%s; %s" % (label, " " * max(1, 13 - len(label)), note))
             A("    db " + ", ".join(str(l[k]) for l in lay))
+        A("MonLeftTab:   ; 첫 칸의 왼쪽 x. 칸이 창보다 좁으면(한 마리) 가운데로 민다")
+        A("    db " + ", ".join(str(G.mon_left(n)) for n in range(1, maxgrp + 1)))
     A("")
 
     # ---- 이름 ----
@@ -590,6 +607,19 @@ def main():
         with io.open(os.path.join(ROOT, "src", "%sspr%d.asm" % (PRE, bi)), "w",
                      encoding="utf-8", newline="\n") as f:
             f.write(SPR_HDR % bi + "\n".join(blines) + "\n")
+
+    # **더 안 쓰는 뱅크 파일은 지운다.** 빌드 스크립트가 src/questspr*.asm 를
+    # 글롭으로 집어 순서대로 이어 붙이므로, 그림이 작아져 뱅크가 줄었을 때
+    # 옛 파일이 남아 있으면 그 뒤의 배경/정면벽/벽면 뱅크가 통째로 밀린다.
+    # 화면이 새까맣게 뜨고, 어셈블은 멀쩡히 되기 때문에 원인을 찾기 어렵다.
+    bi = len(banks)
+    while True:
+        stale = os.path.join(ROOT, "src", "%sspr%d.asm" % (PRE, bi))
+        if not os.path.exists(stale):
+            break
+        os.remove(stale)
+        print("  안 쓰는 뱅크 파일 지움: src/%sspr%d.asm" % (PRE, bi))
+        bi += 1
     with io.open(os.path.join(ROOT, "src", PRE + "rules.asm"), "w",
                  encoding="utf-8", newline="\n") as f:
         f.write("\n".join(L) + "\n")

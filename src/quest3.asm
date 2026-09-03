@@ -237,6 +237,22 @@ MonRowW     ds 1                ; 한 칸의 폭(=높이)
 MonRowCols  ds 1                ; 한 줄에 몇 칸
 MonRowTop   ds 1                ; 첫 줄의 윗변
 MonRowStep  ds 1                ; 줄 간격 (한 줄이면 0)
+MonRowLeft  ds 1                ; 첫 칸의 왼쪽 x (한 마리면 가운데로 밀린다)
+DotMon      ds 1                ; HP 게이지를 그리는 중인 몬스터
+DotX        ds 1                ; 점 줄의 왼쪽 x
+DotY        ds 1
+DotPx       ds 1                ; 지금 점의 x
+DotCol      ds 1
+DotIdx      ds 1                ; 몇 번째 점
+DotLit      ds 1                ; 빨간 점 수
+DotMax      ds 1
+DotWho      ds 1
+HitDmg      ds 1                ; ShowHitNum 이 찍는 중인 피해값
+FlashX      ds 1                ; HitFlash 가 찍는 마름모의 가운데
+FlashY      ds 1
+FlashR      ds 1                ; 지금 그리는 반지름
+FlashDY     ds 1                ; 지금 그리는 줄의 dy (부호 있음)
+FlashRows   ds 1                ; 남은 줄 수
 MonSelCol   ds 1                ; 지금 다루는 칸의 열
 MonSelRow   ds 1                ; 그 칸의 줄
 MonRowX     ds 1                ; 지금 그리는 칸의 왼쪽 끝

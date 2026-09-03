@@ -76,6 +76,9 @@ MonRowSize:
     ld hl, MonStepTab
     call TabByte
     ld (MonRowStep), a
+    ld hl, MonLeftTab
+    call TabByte
+    ld (MonRowLeft), a
     ld a, (MonRowN)
     ret
 
@@ -107,8 +110,8 @@ CellXY:
     ld a, (MonSelCol)
     ld h, a
     call Mult8                  ; HL = 열 * 폭
-    ld a, l
-    add a, VIEW_X
+    ld a, (MonRowLeft)          ; 칸이 창보다 좁으면(한 마리) 가운데로 밀려 있다
+    add a, l
     ld (MonRowX), a
     ld a, (MonRowStep)
     ld e, a
@@ -178,7 +181,7 @@ DrawMonsterRow:
 
     ld a, SPR_FIRSTBK           ; 창을 기본 뱅크로 되돌린다
     ld (ASC8_P3), a
-    ret
+    jp DrawAllHpDots            ; 발아래 HP 게이지
 
 ;-----------------------------------------------------------------------------
 ; MonRowPtr 의 그림을 (MonRowX, MonRowY) 에 MonRowW 칸으로 찍는다.
@@ -503,3 +506,290 @@ CmdBandRestore:                 ; 화면 밖 -> 화면
     db 0
     db 0
     db 0xD0                     ; HMMM
+
+;-----------------------------------------------------------------------------
+; HP 게이지 - 몬스터 발아래 점 다섯
+;
+; 점 하나가 20% 다. 남은 점 수는 올림으로 센다 - 한 대라도 맞았으면 다섯이
+; 아니고, 한 점이라도 남아 있으면 아직 살아 있다는 뜻이 되게.
+;
+;   빨간 점 수 = ceil(hp * 5 / 최대hp)
+;
+; 나눗셈 대신 최대hp 를 다섯 번까지 더해 가며 센다. 답이 0~5 뿐이라 표를 두거나
+; Div16 을 부를 값이 없다.
+;-----------------------------------------------------------------------------
+HP_COL_FULL equ 0x1C            ; GRB332 빨강 (G 0, R 7, B 0)
+HP_COL_GONE equ 0x49            ; 어두운 회색. 던전 벽돌보다 어두워 구별된다
+
+; A = 몬스터 번호. 그 칸의 점 다섯을 찍는다.
+DrawHpDots:
+    ld (DotMon), a
+    call SlotColRow
+    call CellXY                 ; MonRowX/Y = 칸의 왼쪽 위
+
+    ld a, (MonRowW)             ; 점 줄을 칸 안에서 가운데로
+    sub DOT_ROW_W
+    srl a
+    ld hl, MonRowX
+    add a, (hl)
+    ld (DotX), a
+    ld a, (MonRowY)             ; 몬스터 아랫변 + 틈
+    ld hl, MonRowW
+    add a, (hl)
+    add a, DOT_TOP
+    ld (DotY), a
+
+    ld a, (DotMon)              ; 남은 점 수를 센다
+    call MonPtr
+    inc hl                      ; M_HP
+    ld e, (hl)
+    inc hl
+    ld a, (hl)                  ; M_MAXHP
+    ld (DotMax), a
+    ld d, 0
+    ld h, d
+    ld l, e
+    add hl, hl
+    add hl, hl
+    add hl, de                  ; HL = hp * 5
+    ld d, h
+    ld e, l                     ; DE = hp * 5
+    ld hl, 0
+    ld a, (DotMax)
+    ld c, a
+    ld b, 0
+    xor a
+    ld (DotLit), a
+.count:
+    ld a, h                     ; HL >= DE 면 다 셌다
+    cp d
+    jr c, .add
+    jr nz, .done
+    ld a, l
+    cp e
+    jr nc, .done
+.add:
+    add hl, bc
+    ld a, (DotLit)
+    inc a
+    ld (DotLit), a
+    cp DOT_N
+    jr c, .count
+.done:
+
+    xor a
+    ld (DotIdx), a
+.dot:
+    ld a, (DotIdx)              ; 이 점은 빨강인가 회색인가
+    ld hl, DotLit
+    cp (hl)
+    ld a, HP_COL_FULL
+    jr c, .colour
+    ld a, HP_COL_GONE
+.colour:
+    ld (DotCol), a
+
+    ld a, (DotIdx)              ; x = 시작 + 번호 * (폭 + 틈)
+    ld h, a
+    ld e, DOT_W + DOT_GAP
+    call Mult8
+    ld a, (DotX)
+    add a, l
+    ld (DotPx), a
+
+    ld a, (DotY)
+    ld (SprY), a
+    ld b, DOT_H
+.row:
+    push bc
+    ld a, (DotPx)
+    ld e, a
+    ld a, (SprY)
+    call RowAddrB
+    call SetVramWrite
+    ld b, DOT_W
+    ld c, VDP_DATA
+    ld a, (DotCol)
+.pix:
+    out (c), a                  ; 14
+    nop                         ;  5
+    nop                         ;  5
+    djnz .pix                   ; 14/9  -> 화면이 켜진 채라 29 T-state 를 지킨다
+    ld hl, SprY
+    inc (hl)
+    pop bc
+    djnz .row
+
+    ld hl, DotIdx
+    inc (hl)
+    ld a, (hl)
+    cp DOT_N
+    jr c, .dot
+    ret
+
+; 살아 있는 몬스터 전부의 게이지를 다시 찍는다.
+DrawAllHpDots:
+    ld a, (MonRowN)
+    ld b, a
+    xor a
+    ld (DotWho), a
+.each:
+    push bc
+    ld a, (DotWho)
+    call MonPtr
+    inc hl
+    ld a, (hl)                  ; M_HP - 쓰러진 칸은 비워 둔다
+    or a
+    jr z, .skip
+    ld a, (DotWho)
+    call DrawHpDots
+.skip:
+    ld hl, DotWho
+    inc (hl)
+    pop bc
+    djnz .each
+    ret
+
+;-----------------------------------------------------------------------------
+; 맞은 티내기 - 몬스터 머리 위에 "-N" 을 검정 바탕 빨간 글씨로 찍는다.
+;
+; 애니메이션 없음 - 한 번 찍고 끝이다. 다음에 같은 몬스터가 맞으면 같은
+; 자리에 새 값을 덮어 쓴다. PutChar 가 바탕색까지 칠하므로(SetColours 로
+; COL_BLACK 배경 지정) 앞 숫자가 새 숫자보다 길어도 자릿수만큼은 지워진다 -
+; 자릿수 자체를 고정폭(2 자리)으로 찍어 그 안에서는 항상 깨끗이 덮인다.
+;-----------------------------------------------------------------------------
+HITNUM_COL  equ 0x1C            ; 피해 숫자 색 (HP 게이지의 빨강과 같다)
+
+; A = 맞은 칸, B = 깎인 피해.
+ShowHitNum:
+    ld c, a                     ; SlotColRow 가 A 를 쓰므로 칸 번호는 C 로 옮겨 둔다
+    ld a, b
+    ld (HitDmg), a
+    ld a, c
+    call SlotColRow
+    call CellXY                 ; MonRowX/Y = 그 칸의 왼쪽 위
+
+    ld a, (MonRowW)             ; 칸 가운데에서 "-99" 세 글자만큼 왼쪽으로
+    srl a
+    ld hl, MonRowX
+    add a, (hl)
+    sub FONT_W + FONT_W / 2
+    ld b, a
+    ld a, (MonRowY)             ; 머리 위
+    sub 6
+    ld c, a
+    call SetPos
+
+    ld a, HITNUM_COL
+    ld b, COL_BLACK
+    call SetColours
+    ld a, '-'
+    call PutChar
+    ld a, (HitDmg)
+    ld b, 2
+    jp PutNumR
+
+;-----------------------------------------------------------------------------
+; 맞은 표시 - 몬스터 가운데에 흰 마름모(섬광)를 세 번 키우며 찍는다.
+;
+; 화살표(ShowArrow/DrawArrowNow)와 같은 수법이다. 뒤 프레임이 앞 프레임을
+; **완전히 감싸므로**(반지름이 매번 커진다) 지우지 않고 그 위에 덧그리기만
+; 하면 앞 프레임 자국이 하나도 안 남는다 - 화면 밖 버퍼도, 되돌리기도,
+; 몬스터를 다시 그리는 것도 필요 없다. 흔들기가 몬스터 자체를 옮기려다
+; 뒷장을 통째로 조립해야 했던 것과 다른 점이 이것이다.
+;
+; 마지막(가장 큰) 프레임은 다음 완전 다시 그리기(이동/회전/전투 끝)까지
+; 그대로 남는다 - ShowHitNum 의 "-N" 과 같은 방식이다.
+;-----------------------------------------------------------------------------
+FLASH_COL   equ 0xFF            ; 흰색(GRB332 G7 R7 B3) - 던전에 없는 색
+
+; A = 맞은 칸.
+HitFlash:
+    call SlotColRow
+    call CellXY                 ; MonRowX/Y = 그 칸의 왼쪽 위
+    ld a, (MonRowW)             ; 몬스터는 정사각형이라 가운데는 왼쪽위 + 폭/2
+    srl a
+    ld c, a
+    ld hl, MonRowX
+    add a, (hl)
+    ld (FlashX), a
+    ld a, c
+    ld hl, MonRowY
+    add a, (hl)
+    ld (FlashY), a
+
+    ld a, 2
+    call DrawFlash
+    ld b, 2
+    call FlashWait
+    ld a, 4
+    call DrawFlash
+    ld b, 2
+    call FlashWait
+    ld a, 6
+    jp DrawFlash
+
+FlashWait:
+    push bc
+    call WaitVBlank
+    pop bc
+    djnz FlashWait
+    ret
+
+;-----------------------------------------------------------------------------
+; DrawFlash - A = 반지름. (FlashX, FlashY) 가운데로 채운 마름모를 찍는다.
+;
+; 줄마다 반폭 = 반지름 - |dy| (dy 는 -반지름..+반지름). 마름모 안을 outi 없이
+; 그냥 out 반복으로 채운다 - 한 줄이 최대 13 픽셀이라 짧다.
+;-----------------------------------------------------------------------------
+DrawFlash:
+    ld (FlashR), a
+    ld b, a
+    add a, a
+    inc a                        ; A = 2R + 1 = 이 마름모의 총 줄 수
+    ld (FlashRows), a
+    ld a, b
+    neg                          ; A = -R (2의 보수)
+    ld (FlashDY), a
+.row:
+    ld a, (FlashDY)
+    or a
+    jp p, .absdone
+    neg
+.absdone:
+    ld b, a                     ; B = |dy|
+    ld a, (FlashR)
+    sub b
+    jr nc, .hwok
+    xor a
+.hwok:
+    ld c, a                     ; C = 반폭
+    add a, a
+    inc a                       ; A = 이 줄의 픽셀 수 (반폭*2 + 1)
+    ld b, a
+
+    ld a, (FlashX)
+    sub c
+    ld e, a                     ; E = x0 = FlashX - 반폭
+    ld a, (FlashY)
+    ld hl, FlashDY
+    add a, (hl)                 ; A = FlashY + dy
+
+    push bc                     ; 화살표도 이 두 호출을 push/pop 으로 감싼다 -
+    call RowAddrB               ; RowAddrB/SetVramWrite 가 BC 를 건드릴 수 있다.
+    call SetVramWrite           ; 안 지키면 B(픽셀 수)가 깨진다.
+    pop bc
+
+    ld c, VDP_DATA
+    ld a, FLASH_COL
+.pix:
+    out (c), a
+    nop
+    djnz .pix
+
+    ld hl, FlashDY               ; dy 를 R 과 비교하려면 부호 있는 비교가
+    inc (hl)                     ; 필요한데, dy 가 음수인 동안 8비트 부호없는
+    ld hl, FlashRows             ; cp 는 어긋난다(-5 를 251 로 본다) - 그래서
+    dec (hl)                     ; dy 대신 **남은 줄 수**(늘 0 이상의 작은 값)
+    jp nz, .row                  ; 를 세어 0 이 되면 멈춘다. 부호 비교가 아예
+    ret                          ; 필요 없어진다.

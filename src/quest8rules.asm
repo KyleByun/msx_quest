@@ -107,6 +107,12 @@ MON_MAX_COLS equ 4                 ; 가장 많이 늘어설 때의 칸 수
 ARROW_W      equ 12
 ARROW_H      equ 6
 ARROW_GAP    equ 2                 ; 화살표 끝과 머리 사이
+DOT_N        equ 5                 ; HP 게이지 점 수 (하나가 20%)
+DOT_W        equ 3
+DOT_H        equ 4
+DOT_GAP      equ 1
+DOT_TOP      equ 2                 ; 몬스터 아랫변과 점 사이
+DOT_ROW_W    equ 19                ; 점 다섯 줄의 폭
 NAME_CONS_N  equ 15
 NAME_VOW_N   equ 5
 NAME_PAT_N   equ 6
@@ -118,41 +124,39 @@ HERO_BASE_AC equ 12
 ; --- 몬스터 그림이 어느 뱅크 어디에 있는가 -----------------------------
 SPR_W        equ 96
 SPR_H        equ 96
-SPR_BANKS    equ 6
+SPR_BANKS    equ 4
 SPR_FIRSTBK  equ 3
 SPR_BANK_0_W24 equ 3                  ; GOBLIN 24px
-SPR_ADDR_0_W24 equ 0xB00F
+SPR_ADDR_0_W24 equ 0xAB6F
 SPR_BANK_0_W32 equ 3                  ; GOBLIN 32px
-SPR_ADDR_0_W32 equ 0xAE7B
+SPR_ADDR_0_W32 equ 0xA9DB
 SPR_BANK_0_W48 equ 3                  ; GOBLIN 48px
-SPR_ADDR_0_W48 equ 0xAB4E
-SPR_BANK_0_W96 equ 3                  ; GOBLIN 96px
-SPR_ADDR_0_W96 equ 0xA000
-SPR_BANK_1_W96 equ 4                  ; SLIME 96px
-SPR_ADDR_1_W96 equ 0xA000
-SPR_BANK_2_W24 equ 6                  ; DWARF 24px
-SPR_ADDR_2_W24 equ 0xA000
-SPR_BANK_2_W32 equ 5                  ; DWARF 32px
-SPR_ADDR_2_W32 equ 0xBBA4
-SPR_BANK_2_W48 equ 5                  ; DWARF 48px
-SPR_ADDR_2_W48 equ 0xB5C2
-SPR_BANK_2_W96 equ 5                  ; DWARF 96px
-SPR_ADDR_2_W96 equ 0xA000
-SPR_BANK_3_W96 equ 6                  ; TROLL 96px
-SPR_ADDR_3_W96 equ 0xA1AE
-SPR_BANK_4_W24 equ 8                  ; COBRA 24px
-SPR_ADDR_4_W24 equ 0xA000
-SPR_BANK_4_W32 equ 7                  ; COBRA 32px
-SPR_ADDR_4_W32 equ 0xBCD9
-SPR_BANK_4_W48 equ 7                  ; COBRA 48px
-SPR_ADDR_4_W48 equ 0xB6C3
-SPR_BANK_4_W96 equ 7                  ; COBRA 96px
-SPR_ADDR_4_W96 equ 0xA000
-SPR_BANK_5_W96 equ 8                  ; MIMIC 96px
-SPR_ADDR_5_W96 equ 0xA1B3
-; 뱅크 3: 4354 / 8192 바이트
-; 뱅크 4: 4770 / 8192 바이트
-; 뱅크 5: 7800 / 8192 바이트
-; 뱅크 6: 6251 / 8192 바이트
-; 뱅크 7: 8121 / 8192 바이트
-; 뱅크 8: 6610 / 8192 바이트
+SPR_ADDR_0_W48 equ 0xA6AE
+SPR_BANK_0_W72 equ 3                  ; GOBLIN 72px
+SPR_ADDR_0_W72 equ 0xA000
+SPR_BANK_1_W72 equ 3                  ; SLIME 72px
+SPR_ADDR_1_W72 equ 0xAC62
+SPR_BANK_2_W24 equ 4                  ; DWARF 24px
+SPR_ADDR_2_W24 equ 0xB54D
+SPR_BANK_2_W32 equ 4                  ; DWARF 32px
+SPR_ADDR_2_W32 equ 0xB279
+SPR_BANK_2_W48 equ 4                  ; DWARF 48px
+SPR_ADDR_2_W48 equ 0xAC97
+SPR_BANK_2_W72 equ 4                  ; DWARF 72px
+SPR_ADDR_2_W72 equ 0xA000
+SPR_BANK_3_W72 equ 5                  ; TROLL 72px
+SPR_ADDR_3_W72 equ 0xA000
+SPR_BANK_4_W24 equ 6                  ; COBRA 24px
+SPR_ADDR_4_W24 equ 0xA8F6
+SPR_BANK_4_W32 equ 6                  ; COBRA 32px
+SPR_ADDR_4_W32 equ 0xA616
+SPR_BANK_4_W48 equ 6                  ; COBRA 48px
+SPR_ADDR_4_W48 equ 0xA000
+SPR_BANK_4_W72 equ 5                  ; COBRA 72px
+SPR_ADDR_4_W72 equ 0xAD29
+SPR_BANK_5_W72 equ 6                  ; MIMIC 72px
+SPR_ADDR_5_W72 equ 0xAAA9
+; 뱅크 3: 5936 / 8192 바이트
+; 뱅크 4: 5883 / 8192 바이트
+; 뱅크 5: 6733 / 8192 바이트
+; 뱅크 6: 6319 / 8192 바이트

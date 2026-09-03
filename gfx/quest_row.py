@@ -417,7 +417,8 @@ def check(outdir):
     ay = int(txt["arrowy"])
     xs = [arrow_x(os.path.join(outdir, "pick%d.bin" % i), ay) for i in range(3)]
     cols, _r, w, _t, _s = G.mon_layout(3)
-    wantx = [VIEW_X + c * w + (w - ARROW_W) // 2 for c in (0, 2)] + [None]
+    left = G.mon_left(3)
+    wantx = [left + c * w + (w - ARROW_W) // 2 for c in (0, 2)] + [None]
     hit = int(txt["hit"])
     hp0, hp2 = int(txt["hp0"]), int(txt["hp2"])
     ok_move = got == want

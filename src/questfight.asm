@@ -65,11 +65,29 @@ MakeEncounter:
 .onekind:
     ENDIF
 
-    ld a, (MonKind)             ; 마릿수는 앞 종류의 무리 최대로 정한다
+    ; 마릿수는 두 종류의 무리 최대 중 **작은 쪽**으로 정한다. 앞 종류만 보면
+    ; 무리 최대가 1 인 종류(슬라임/트롤/미믹)가 섞였을 때 그 종류를 여러 마리
+    ; 자리에 놓게 된다. quest_sprite.py 는 그 종류의 줄인 그림을 자기 무리
+    ; 최대(1)까지만 굽고 그 위는 원본 크기(72px)로 채워 두는데, DrawOneMon 은
+    ; 칸 폭만큼만 줄을 돈다(SprRows = MonRowW). 72px 그림을 32px 칸에 넣으면
+    ; 위쪽 32줄만 그려지고 그나마도 가로가 칸을 넘어 옆 칸을 덮는다 - 뒷벽이
+    ; 깨져 보이던 원인이 이것이었다. Mult8 은 C 를 안 건드리므로 MonTypePtr 을
+    ; 두 번 불러도 먼저 잰 값이 살아남는다.
+    ld a, (MonKind)
     call MonTypePtr
     ld de, T_MAXGRP
     add hl, de
-    ld c, (hl)
+    ld a, (hl)
+    ld c, a
+    ld a, (MonKind2)
+    call MonTypePtr
+    ld de, T_MAXGRP
+    add hl, de
+    ld a, (hl)
+    cp c
+    jr nc, .gotmax
+    ld c, a                     ; 뒤 종류 쪽이 더 작다
+.gotmax:
     call RandMod
     inc a
     ld (MonCount), a
@@ -394,7 +412,18 @@ DamageMonster:
     ld a, c
     sub b
     ld (hl), a
+    IFDEF SCREEN8                ; (TmpType 은 맞는 칸 번호다)
+    ld a, (TmpType)             ; 발아래 게이지를 그 자리에서 고친다. 던전을
+    call DrawHpDots             ; 다시 그릴 때까지 두면 한 라운드 내내 옛 값이
+    ld a, (TmpType)             ; 보인다.
+    call HitFlash                ; 가운데에 흰 마름모 섬광 (지우기 없음)
+    ld a, (TmpDmg)
+    ld b, a
+    ld a, (TmpType)
+    jp ShowHitNum                ; 머리 위에 "-N" 을 찍는다
+    ELSE
     ret
+    ENDIF
 
 ;-----------------------------------------------------------------------------
 ; A = 몬스터 번호. 살아 있으면 아무 영웅이나 친다.
