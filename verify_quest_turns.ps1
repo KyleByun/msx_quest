@@ -55,6 +55,19 @@ try {
     if (-not (Test-Path "$work\cursor.txt")) { throw "커서 검증 결과가 안 나왔습니다" }
     & uv run python "$PSScriptRoot\gfx\quest_turns.py" cursorcheck $work
     if ($LASTEXITCODE -ne 0) { throw "커서 검증 실패" }
+
+    # 도망 - 주사위를 굴리는 명령이라 결과는 확정적이지 않지만 **입력은** 그렇다.
+    # 면 수가 20 인지, 더해지는 값이 민첩 보정인지를 본다.
+    Remove-Item "$work\flee.txt" -ErrorAction SilentlyContinue
+    & uv run python "$PSScriptRoot\gfx\quest_turns.py" fleetcl $work
+    Start-Process -FilePath $OPENMSX -NoNewWindow -Wait -ArgumentList @(
+        '-machine', $MSX_MACHINE,
+        '-cart',    "`"$PSScriptRoot\build\quest.rom`"",
+        '-romtype', 'ASCII8',
+        '-script',  "`"$work\flee.tcl`"") | Out-Null
+    if (-not (Test-Path "$work\flee.txt")) { throw "도망 검증 결과가 안 나왔습니다" }
+    & uv run python "$PSScriptRoot\gfx\quest_turns.py" fleecheck $work
+    if ($LASTEXITCODE -ne 0) { throw "도망 검증 실패" }
 }
 finally {
     Pop-Location

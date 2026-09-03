@@ -791,17 +791,25 @@ DoCommand:
     jp MsgFlush
 
 .flee:                          ; d20 + 민첩 보정 >= 12 면 파티가 빠져나간다
+    ; **굴림을 먼저 한다.** 예전에는 민첩 보정을 C 에 담아 두고 굴렸는데 두 군데가
+    ; 틀렸다. RandMod 는 면 수를 **C** 로 받는데 A 에 20 을 넣고 있었고(그래서
+    ; 실제 면 수는 민첩 보정이었다 - 보정이 0 이면 0 으로 나누는 꼴), 게다가
+    ; RandMod 가 BC 를 뭉개므로 뒤의 add a,c 는 난수 찌꺼기를 더하고 있었다.
+    ; 실측: C=0, A=85 가 나왔다. 12 를 넘으니 도망이 거의 언제나 성공했다.
+    ;
+    ; PartyPtr 과 AbilityMod 는 HL 과 DE 만 쓰므로 굴림을 B 에 두면 살아남는다.
+    ld c, 20
+FleeRoll:                       ; 검사가 여기서 면 수를 확인한다
+    call RollDie                ; A = 1..20
+    ld b, a
     ld a, (MenuHero)
     call PartyPtr
     ld de, P_DEX
     add hl, de
     ld a, (hl)
     call AbilityMod
-    ld c, a
-    ld a, 20
-    call RandMod
-    inc a
-    add a, c
+FleeTotal:
+    add a, b
     cp 12
     jr c, .noflee
     ld a, MSG_FLED
