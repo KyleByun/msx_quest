@@ -1,6 +1,6 @@
 ; gfx/quest_convert.py 가 생성한 파일입니다. 직접 고치지 마세요.
 ;
-; title.mp3 -> PSG 세 채널 (사건 [283, 285, 135]) (2824 바이트)
+; title -> PSG 세 채널 (사건 [283, 285, 135]) (2824 바이트)
 
     DEVICE NOSLOT64K
 

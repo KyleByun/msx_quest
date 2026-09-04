@@ -4,5 +4,5 @@
 MusTab:
     ; title <- title (2824 바이트, 1835 프레임)
     dw 2824, 0, 1136, 2280
-    ; battle <- Final_Sector_Pursuit (3572 바이트, 1835 프레임)
-    dw 3572, 0, 1432, 2496
+    ; battle <- Obsidian_Keep (2124 바이트, 1834 프레임)
+    dw 2124, 0, 1548, 2088

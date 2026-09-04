@@ -40,7 +40,7 @@ mkdir -p build
 python3 gfx/quest_msg.py
 python3 gfx/quest_gear.py
 python3 gfx/quest_rules.py --bpp 8
-python3 gfx/psg_music.py title battle=Final_Sector_Pursuit  # 전투곡은 어느 빌드에나 있다
+python3 gfx/psg_music.py title battle=Obsidian_Keep   # 전투곡은 어느 빌드에나 있다
 [ "$TITLE" = 1 ] && python3 gfx/quest_title.py
 
 DEFS=()

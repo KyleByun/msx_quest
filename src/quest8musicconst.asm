@@ -11,7 +11,7 @@ MUSIC_BANK   equ RUN_BANK0 + RUN_BANKS
 MUS_N        equ 2
 MUS_STRIDE   equ 8                 ; 길이 + 채널 셋의 자리, 워드 넷
 
-MUS_TITLE    equ 0                 ; title.mp3
-MUS_BATTLE   equ 1                 ; Final_Sector_Pursuit.mp3
+MUS_TITLE    equ 0                 ; title
+MUS_BATTLE   equ 1                 ; Obsidian_Keep
 
-MUSIC_MAXLEN equ 3572              ; RAM 에 잡아 둘 자리
+MUSIC_MAXLEN equ 2824              ; RAM 에 잡아 둘 자리
