@@ -14,4 +14,4 @@ MUS_STRIDE   equ 8                 ; 길이 + 채널 셋의 자리, 워드 넷
 MUS_TITLE    equ 0                 ; title.mp3
 MUS_BATTLE   equ 1                 ; Final_Sector_Pursuit.mp3
 
-MUSIC_MAXLEN equ 3544              ; RAM 에 잡아 둘 자리
+MUSIC_MAXLEN equ 3572              ; RAM 에 잡아 둘 자리
