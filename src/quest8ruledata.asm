@@ -234,43 +234,119 @@ MonSprTab:
     db SPR_BANK_5_W72
     dw SPR_ADDR_5_W72
 
-; 칼질 자국. 색인은 (마릿수-1)*SLASH_N + 장. 크기는 몬스터와 같다.
+; 맞은 자국. 무기 계열마다 다른 그림이고, 크기는 몬스터와 같다.
+; 색인은 (계열*5 + 마릿수-1)*SLASH_N + 장, 한 칸이 뱅크 1 + 주소 2.
+SLASH_GRP    equ 5                 ; 계열 하나가 도는 마릿수
 SlashTab:
+    ; --- 칼 계열 ---
     ; 1 마리 (72 픽셀)
-    db SLASH_BANK_W72_F0
-    dw SLASH_ADDR_W72_F0
-    db SLASH_BANK_W72_F1
-    dw SLASH_ADDR_W72_F1
-    db SLASH_BANK_W72_F2
-    dw SLASH_ADDR_W72_F2
+    db SLASH_BANK_F0_W72_F0
+    dw SLASH_ADDR_F0_W72_F0
+    db SLASH_BANK_F0_W72_F1
+    dw SLASH_ADDR_F0_W72_F1
+    db SLASH_BANK_F0_W72_F2
+    dw SLASH_ADDR_F0_W72_F2
     ; 2 마리 (48 픽셀)
-    db SLASH_BANK_W48_F0
-    dw SLASH_ADDR_W48_F0
-    db SLASH_BANK_W48_F1
-    dw SLASH_ADDR_W48_F1
-    db SLASH_BANK_W48_F2
-    dw SLASH_ADDR_W48_F2
+    db SLASH_BANK_F0_W48_F0
+    dw SLASH_ADDR_F0_W48_F0
+    db SLASH_BANK_F0_W48_F1
+    dw SLASH_ADDR_F0_W48_F1
+    db SLASH_BANK_F0_W48_F2
+    dw SLASH_ADDR_F0_W48_F2
     ; 3 마리 (32 픽셀)
-    db SLASH_BANK_W32_F0
-    dw SLASH_ADDR_W32_F0
-    db SLASH_BANK_W32_F1
-    dw SLASH_ADDR_W32_F1
-    db SLASH_BANK_W32_F2
-    dw SLASH_ADDR_W32_F2
+    db SLASH_BANK_F0_W32_F0
+    dw SLASH_ADDR_F0_W32_F0
+    db SLASH_BANK_F0_W32_F1
+    dw SLASH_ADDR_F0_W32_F1
+    db SLASH_BANK_F0_W32_F2
+    dw SLASH_ADDR_F0_W32_F2
     ; 4 마리 (24 픽셀)
-    db SLASH_BANK_W24_F0
-    dw SLASH_ADDR_W24_F0
-    db SLASH_BANK_W24_F1
-    dw SLASH_ADDR_W24_F1
-    db SLASH_BANK_W24_F2
-    dw SLASH_ADDR_W24_F2
+    db SLASH_BANK_F0_W24_F0
+    dw SLASH_ADDR_F0_W24_F0
+    db SLASH_BANK_F0_W24_F1
+    dw SLASH_ADDR_F0_W24_F1
+    db SLASH_BANK_F0_W24_F2
+    dw SLASH_ADDR_F0_W24_F2
     ; 5 마리 (32 픽셀)
-    db SLASH_BANK_W32_F0
-    dw SLASH_ADDR_W32_F0
-    db SLASH_BANK_W32_F1
-    dw SLASH_ADDR_W32_F1
-    db SLASH_BANK_W32_F2
-    dw SLASH_ADDR_W32_F2
+    db SLASH_BANK_F0_W32_F0
+    dw SLASH_ADDR_F0_W32_F0
+    db SLASH_BANK_F0_W32_F1
+    dw SLASH_ADDR_F0_W32_F1
+    db SLASH_BANK_F0_W32_F2
+    dw SLASH_ADDR_F0_W32_F2
+    ; --- 창 계열 ---
+    ; 1 마리 (72 픽셀)
+    db SLASH_BANK_F1_W72_F0
+    dw SLASH_ADDR_F1_W72_F0
+    db SLASH_BANK_F1_W72_F1
+    dw SLASH_ADDR_F1_W72_F1
+    db SLASH_BANK_F1_W72_F2
+    dw SLASH_ADDR_F1_W72_F2
+    ; 2 마리 (48 픽셀)
+    db SLASH_BANK_F1_W48_F0
+    dw SLASH_ADDR_F1_W48_F0
+    db SLASH_BANK_F1_W48_F1
+    dw SLASH_ADDR_F1_W48_F1
+    db SLASH_BANK_F1_W48_F2
+    dw SLASH_ADDR_F1_W48_F2
+    ; 3 마리 (32 픽셀)
+    db SLASH_BANK_F1_W32_F0
+    dw SLASH_ADDR_F1_W32_F0
+    db SLASH_BANK_F1_W32_F1
+    dw SLASH_ADDR_F1_W32_F1
+    db SLASH_BANK_F1_W32_F2
+    dw SLASH_ADDR_F1_W32_F2
+    ; 4 마리 (24 픽셀)
+    db SLASH_BANK_F1_W24_F0
+    dw SLASH_ADDR_F1_W24_F0
+    db SLASH_BANK_F1_W24_F1
+    dw SLASH_ADDR_F1_W24_F1
+    db SLASH_BANK_F1_W24_F2
+    dw SLASH_ADDR_F1_W24_F2
+    ; 5 마리 (32 픽셀)
+    db SLASH_BANK_F1_W32_F0
+    dw SLASH_ADDR_F1_W32_F0
+    db SLASH_BANK_F1_W32_F1
+    dw SLASH_ADDR_F1_W32_F1
+    db SLASH_BANK_F1_W32_F2
+    dw SLASH_ADDR_F1_W32_F2
+    ; --- 활 계열 ---
+    ; 1 마리 (72 픽셀)
+    db SLASH_BANK_F2_W72_F0
+    dw SLASH_ADDR_F2_W72_F0
+    db SLASH_BANK_F2_W72_F1
+    dw SLASH_ADDR_F2_W72_F1
+    db SLASH_BANK_F2_W72_F2
+    dw SLASH_ADDR_F2_W72_F2
+    ; 2 마리 (48 픽셀)
+    db SLASH_BANK_F2_W48_F0
+    dw SLASH_ADDR_F2_W48_F0
+    db SLASH_BANK_F2_W48_F1
+    dw SLASH_ADDR_F2_W48_F1
+    db SLASH_BANK_F2_W48_F2
+    dw SLASH_ADDR_F2_W48_F2
+    ; 3 마리 (32 픽셀)
+    db SLASH_BANK_F2_W32_F0
+    dw SLASH_ADDR_F2_W32_F0
+    db SLASH_BANK_F2_W32_F1
+    dw SLASH_ADDR_F2_W32_F1
+    db SLASH_BANK_F2_W32_F2
+    dw SLASH_ADDR_F2_W32_F2
+    ; 4 마리 (24 픽셀)
+    db SLASH_BANK_F2_W24_F0
+    dw SLASH_ADDR_F2_W24_F0
+    db SLASH_BANK_F2_W24_F1
+    dw SLASH_ADDR_F2_W24_F1
+    db SLASH_BANK_F2_W24_F2
+    dw SLASH_ADDR_F2_W24_F2
+    ; 5 마리 (32 픽셀)
+    db SLASH_BANK_F2_W32_F0
+    dw SLASH_ADDR_F2_W32_F0
+    db SLASH_BANK_F2_W32_F1
+    dw SLASH_ADDR_F2_W32_F1
+    db SLASH_BANK_F2_W32_F2
+    dw SLASH_ADDR_F2_W32_F2
+    ASSERT FAM_N * SLASH_GRP * SLASH_N * 3 <= 256
 
 ; 마릿수별 배치. gfx/quest_geom.py 의 mon_layout 이 정한 값이다.
 MonSprW:      ; 한 마리의 폭(=높이)

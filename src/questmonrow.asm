@@ -32,20 +32,57 @@
 
 ARROW_COL   equ 0xFC            ; GRB332 로 노랑 (G 7, R 7, B 0). 던전에 없는 색이다.
 
-; 화살표 밑그림을 옮겨 둘 화면 밖 VRAM 의 줄 번호.
-; 정면 벽 픽셀(FRONT_VY 부터 FRONT_PIX_LEN 바이트) 뒤에 두어야 한다.
-SAVE_VY     equ 300
-    ASSERT SAVE_VY >= FRONT_VY + (FRONT_PIX_LEN + VRAM_ROW - 1) / VRAM_ROW
+;-----------------------------------------------------------------------------
+; 화면 밖 VRAM 에 떠 두는 자리 - 화살표 밑그림과, 칼질하는 동안의 칸.
+;
+; **줄이 아니라 x 로 정면 벽 그림을 피한다.** 정면 벽은 깊이별 사각형을 세로로
+; 쌓아 두어 FRONT_VY 부터 FRONT_ROWS 줄을 차지하는데, 폭은 FRONT_MAXW 뿐이라
+; 그 오른쪽이 줄마다 통째로 빈다. 거기 놓으면 겹치지 않으면서 줄도 안 쓴다.
+;
+; 예전에는 줄로 피하려고 FRONT_PIX_LEN / VRAM_ROW 로 정면 벽의 끝 줄을 셌다.
+; 정면 벽이 한 줄 256 바이트를 꽉 채운다고 본 셈인데 진짜 폭은 FRONT_MAXW 라,
+; 30 줄로 본 것이 실제로는 154 줄이었다. 그래서 화살표 띠(300)와 칼질 칸(310)이
+; 정면 벽 그림 **위에** 얹혔고, 전투를 한 번 하고 나면 막다른 길의 벽에 그때
+; 떠 둔 몬스터가 박혀 보였다. 다시 그려도 그대로였다 - 그리기가 빠뜨린 것이
+; 아니라 오려 붙일 원본이 망가진 것이라서.
+;-----------------------------------------------------------------------------
+SCRATCH_X   equ 128             ; 정면 벽 그림 오른쪽
+EFX_MAXH    equ 96              ; 칸은 최대 72 지만 mon_layout 이 바뀌어도 되게
+EFX_MAXW    equ EFX_MAXH + SHAKE_DX             ; 흔들리는 폭까지 넣어 짓는다
 
-; 칼질하는 동안 칸을 통째로 떠 둘 자리. 화살표 띠(SAVE_VY, ARROW_H 줄) 뒤에
-; 놓는다. 칸은 최대 72x72 이지만 96 까지 잡아 둔다 - mon_layout 이 바뀌어도
-; 여기서 걸리지 않게.
-SLASH_VY    equ 310
-SLASH_MAXW  equ 96
-    ASSERT SLASH_VY >= SAVE_VY + ARROW_H
-    ASSERT SLASH_VY + SLASH_MAXW <= 512         ; VRAM 128KB = 512 줄
+; 연출용 작업대. 흔들린 그림을 여기서 지어 화면에 한 번에 얹는다.
+EFX_VY      equ FRONT_VY
+SAVE_VY     equ EFX_VY + EFX_MAXH               ; 화살표 밑그림
+
+    ASSERT SCRATCH_X >= FRONT_MAXW              ; 정면 벽 그림과 x 가 안 겹친다
+    ASSERT SCRATCH_X + EFX_MAXW <= VRAM_ROW     ; 한 줄 안에 들어간다
+    ASSERT SCRATCH_X + VIEW_W <= VRAM_ROW
+    ASSERT SAVE_VY + ARROW_H <= 512             ; VRAM 128KB = 512 줄
     ASSERT MON_SCALE_N <= MON_N
     ASSERT ARROW_W <= VIEW_W / MON_MAX_COLS
+
+;-----------------------------------------------------------------------------
+; 던전 뷰포트의 뒷면 (더블버퍼링)
+;
+; 던전도 몬스터도 화면이 아니라 여기에 그리고, 다 되면 HMMM 한 번으로 화면에
+; 옮긴다. 그리는 과정이 안 보이는 것이 첫째지만, 더 큰 것은 **지운 자리를
+; 되살릴 밑그림이 늘 있다**는 것이다. 흔들기나 떠오르는 숫자처럼 잠깐 덮었다가
+; 되돌려야 하는 연출은 여기서 오려 오면 끝난다.
+;
+; x 를 뷰포트와 **같게** 두는 것이 요령이다. 그러면 화면에 그리던 코드를 한 줄도
+; 안 고치고 y 만 옮겨서 그대로 뒷면에 그린다 (RowAddr 의 DrawYOfs).
+;
+;   BACK   던전 + 몬스터를 합성한 것. 연출을 되돌릴 때 여기서 오려 온다.
+;   CLEAN  몬스터를 얹기 **전**의 던전만. 흔들 때 있던 자리를 지우려면 필요하다.
+;          전투 중에만 뜬다 - 뷰포트 한 장을 옮기는 값이 싸지 않다.
+;-----------------------------------------------------------------------------
+BACK_VY     equ 410
+CLEAN_X     equ VIEW_X + VIEW_W
+BACK_YOFS   equ BACK_VY - VIEW_Y             ; 화면 y -> 뒷면 y
+    ASSERT BACK_VY >= FRONT_END_VY           ; 정면 벽 그림 아래에 둔다
+    ASSERT BACK_VY + VIEW_H <= 512
+    ASSERT CLEAN_X + VIEW_W <= VRAM_ROW      ; 두 장이 한 줄에 나란히 들어간다
+    ASSERT BACK_VY >= 256                    ; 뒷면은 통째로 A16 = 1 쪽에 있다
 
 ; HL = 표, C = 색인 -> A = 그 바이트. HL, B 파괴.
 TabByte:
@@ -255,6 +292,82 @@ DrawOneMon:
     ld (SprRows), a
     jr nz, .row
     ret
+
+;=============================================================================
+; 뒷면에 합성해서 화면에 얹기
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; 던전 한 장. **던전을 그리는 자리는 여기 하나뿐이다** - 다른 데서 RenderDungeon
+; 을 부르면 뒷면이 화면과 어긋나고, 그러면 연출을 되돌릴 때 지난 그림이 되살아난다.
+;
+; 전투 중에만 CLEAN 사본을 뜬다. 몬스터를 흔들려면 그 자리를 지울 바탕이 있어야
+; 하는데, 걸어 다닐 때는 몬스터가 없어 BACK 이 곧 바탕이다.
+;-----------------------------------------------------------------------------
+ComposeView:
+    call BackOn
+    call RenderDungeon
+    ld a, (BattleOn)
+    or a
+    jr z, .nomon
+    call CleanSave              ; 몬스터를 얹기 전의 던전을 따로 떠 둔다
+    call DrawMonsterRow
+.nomon:
+    call BackOff                ; **중간에 빠져나가면 안 된다** - A16 이 선 채로
+    ld hl, CmdBlitBack          ; 나가면 오른쪽 양피지 글자가 뒷면에 찍힌다
+    jp SendWaitCmd
+
+; 그리는 면을 뒷면으로 / 화면으로 돌린다.
+BackOn:
+    ld a, BACK_YOFS & 0xFF
+    ld (DrawYOfs), a
+    ld a, 0x04
+    ld (DrawA16), a
+    ld hl, BACK_YOFS
+    ld (CmdYOfs), hl
+    ret
+
+BackOff:
+    xor a
+    ld (DrawYOfs), a
+    ld (DrawA16), a
+    ld hl, 0
+    ld (CmdYOfs), hl
+    ret
+
+CleanSave:
+    ld hl, CmdCleanSave
+; HL = 15 바이트 명령 블록. 보내고 끝날 때까지 기다린다.
+SendWaitCmd:
+    ld a, 32
+    ld (CmdFirst), a
+    ld b, 15
+    call SendVdpCmd
+    jp WaitVdpCmd
+
+; R#32 부터: SX, SY, DX, DY, NX, NY, CLR, ARG, CMD
+CmdBlitBack:                    ; 뒷면 -> 화면
+    dw VIEW_X
+    dw BACK_VY
+    dw VIEW_X
+    dw VIEW_Y
+    dw VIEW_W
+    dw VIEW_H
+    db 0
+    db 0
+    db 0xD0                     ; HMMM
+
+CmdCleanSave:                   ; 뒷면(아직 던전뿐) -> 몬스터 없는 사본
+    dw VIEW_X
+    dw BACK_VY
+    dw CLEAN_X
+    dw BACK_VY
+    dw VIEW_W
+    dw VIEW_H
+    db 0
+    db 0
+    db 0xD0                     ; HMMM
+
 
 ;=============================================================================
 ; 화살표
@@ -490,14 +603,13 @@ MonDiedRedraw:
     xor a
     ld (MonDied), a
     call WaitVBlank             ; 메인 루프와 같은 자리에서 그린다
-    call RenderDungeon
-    jp DrawMonsterRow
+    jp ComposeView
 
 ; R#32 부터: SX, SY, DX, DY, NX, NY, CLR, ARG, CMD
 CmdBandSave:                    ; 화면 -> 화면 밖
     dw VIEW_X
     dw 0                        ; SY <- ArrowY
-    dw 0
+    dw SCRATCH_X
     dw SAVE_VY
     dw VIEW_W
     dw ARROW_H
@@ -506,7 +618,7 @@ CmdBandSave:                    ; 화면 -> 화면 밖
     db 0xD0                     ; HMMM
 
 CmdBandRestore:                 ; 화면 밖 -> 화면
-    dw 0
+    dw SCRATCH_X
     dw SAVE_VY
     dw VIEW_X
     dw 0                        ; DY <- ArrowY
@@ -668,27 +780,120 @@ DrawAllHpDots:
 ; 자릿수 자체를 고정폭(2 자리)으로 찍어 그 안에서는 항상 깨끗이 덮인다.
 ;-----------------------------------------------------------------------------
 HITNUM_COL  equ 0x1C            ; 피해 숫자 색 (HP 게이지의 빨강과 같다)
+HITNUM_W    equ FONT_W * 3      ; "-99" 세 글자가 나아가는 폭
+; 지울 때는 이보다 넓어야 한다. 글자 비트맵은 8 도트인데 FONT_W 는 **다음
+; 글자까지의 간격**이라 마지막 글자가 두 도트 더 나간다. 처음에 이걸 놓쳐서
+; 숫자가 지나간 자리에 오른쪽 두 줄이 남았다.
+HITNUM_ERW  equ FONT_W * 2 + 8
+HITNUM_MAX  equ 99              ; 세 자리가 되면 지울 칸을 넘는다
+; 떠오르는 속도. 처음에는 두 도트씩 두 프레임(여섯 장, 0.19 초)이었는데 너무
+; 빨라 읽을 틈이 없었다. 한 도트씩 세 프레임이면 열한 장, 0.55 초로 천천히 뜬다.
+HITNUM_RISE equ 10              ; 몇 도트 떠오르는가
+HITNUM_STEP equ 1               ; 한 장에 몇 도트
+HITNUM_HOLD equ 3               ; 한 장을 몇 프레임 두는가
 
 ; A = 맞은 칸, B = 깎인 피해.
-ShowHitNum:
-    ld c, a                     ; SlotColRow 가 A 를 쓰므로 칸 번호는 C 로 옮겨 둔다
+FloatHitNum:
+    ld c, a
     ld a, b
+    cp HITNUM_MAX + 1
+    jr c, .fits
+    ld a, HITNUM_MAX
+.fits:
     ld (HitDmg), a
     ld a, c
+    push af
+    call MonRowSize             ; 칸 크기는 마릿수에서 나온다
+    pop af
     call SlotColRow
     call CellXY                 ; MonRowX/Y = 그 칸의 왼쪽 위
 
-    ld a, (MonRowW)             ; 칸 가운데에서 "-99" 세 글자만큼 왼쪽으로
+    ld a, (MonRowW)             ; 가로는 칸 가운데
     srl a
     ld hl, MonRowX
     add a, (hl)
-    sub FONT_W + FONT_W / 2
-    ld b, a
-    ld a, (MonRowY)             ; 머리 위
-    sub 6
-    ld c, a
-    call SetPos
+    sub HITNUM_W / 2
+    ; 뷰포트 안으로 밀어 넣는다. 칸이 좁으면 가운데 맞춘 자리가 밖으로 나가고,
+    ; 그러면 오른쪽 양피지에 빨간 자국이 남는다. 칸 폭은 MonSprW 가 정하므로
+    ; 어셈블 때 따질 수가 없다.
+    cp VIEW_X + VIEW_W - HITNUM_ERW + 1
+    jr c, .lx
+    ld a, VIEW_X + VIEW_W - HITNUM_ERW
+.lx:
+    cp VIEW_X
+    jr nc, .gotx
+    ld a, VIEW_X
+.gotx:
+    ld (HitNumX), a
 
+    ld a, (MonRowW)             ; 세로는 몸 한가운데
+    srl a
+    ld hl, MonRowY
+    add a, (hl)
+    sub FONT_H / 2
+    ld (HitNumY), a
+
+    sub VIEW_Y                  ; 뷰포트 위로는 안 나간다
+    cp HITNUM_RISE
+    jr c, .rise
+    ld a, HITNUM_RISE
+.rise:
+    ld (HitNumLeft), a
+    xor a
+    ld (HitNumGap), a
+    call HitNumBuild            ; 글자는 한 번만 짓는다
+
+.loop:
+    call HitNumBlit             ; 작업대 -> 화면 (통짜 사각형)
+    ld a, (HitNumGap)
+    or a
+    call nz, HitNumTrail        ; 위로 뜨면서 아래에 빈 줄을 메운다
+    ld b, HITNUM_HOLD
+.wait:
+    push bc
+    call WaitVBlank
+    pop bc
+    djnz .wait
+
+    ld a, (HitNumLeft)
+    or a
+    jp z, HitNumErase           ; 다 올랐으면 지우고 끝 (jr 사거리를 넘는다)
+    cp HITNUM_STEP
+    jr nc, .full
+    ld b, a                     ; 남은 것이 한 걸음보다 적다
+    jr .move
+.full:
+    ld b, HITNUM_STEP
+.move:
+    ld a, (HitNumLeft)
+    sub b
+    ld (HitNumLeft), a
+    ld a, (HitNumY)
+    sub b
+    ld (HitNumY), a
+    ld a, b
+    ld (HitNumGap), a
+    jr .loop
+
+;-----------------------------------------------------------------------------
+; "-N" 을 화면 밖 작업대에 **한 번만** 짓는다.
+;
+; 예전에는 걸음마다 화면에서 지우고 CPU 로 다시 찍었다. 재 보니 지우고 다시
+; 찍기까지 25 ms - 한 프레임(16.7 ms)보다 길어서, 걸음마다 숫자가 없는 화면이
+; 한 장씩 나갔다. 멈춰 놓고 보면 멀쩡한데 움직이면 깜빡이던 것이 이것이다.
+;
+; 글자는 바탕까지 칠하는 **통짜 사각형**이라(PutChar 가 배경색을 함께 찍는다)
+; 한 번 지어 두면 옮길 때는 그대로 오려 붙이면 된다. 화면에 가는 것은 다 지은
+; 사각형뿐이라 빈 순간이 없고, 걸음마다 드는 값도 25 ms 에서 1 ms 아래로 준다.
+;-----------------------------------------------------------------------------
+HitNumBuild:
+    ld a, EFX_VY & 0xFF         ; TextY 0 이 작업대의 첫 줄이 되게
+    ld (DrawYOfs), a
+    ld a, 0x04                  ; 작업대는 줄 256 위에 있다
+    ld (DrawA16), a
+    ld b, SCRATCH_X
+    ld c, 0
+    call SetPos
     ld a, HITNUM_COL
     ld b, COL_BLACK
     call SetColours
@@ -696,7 +901,394 @@ ShowHitNum:
     call PutChar
     ld a, (HitDmg)
     ld b, 2
-    jp PutNumR
+    call PutNumR
+    xor a
+    ld (DrawYOfs), a
+    ld (DrawA16), a
+    ret
+
+; 작업대의 글자를 (HitNumX, HitNumY) 에 얹는다.
+HitNumBlit:
+    call HitNumCmd
+    ld a, SCRATCH_X
+    ld (CmdBuf + 0), a          ; SX
+    ld hl, EFX_VY
+    ld (CmdBuf + 2), hl         ; SY
+    ld a, (HitNumY)
+    ld (CmdBuf + 6), a          ; DY
+    ld a, FONT_H
+    ld (CmdBuf + 10), a         ; NY
+    ld hl, CmdBuf
+    jp SendWaitCmd
+
+; 글자가 뜨면서 아래에 남는 줄(HitNumGap)을 BACK 에서 메운다.
+HitNumTrail:
+    call HitNumCmd
+    ld a, (HitNumY)
+    add a, FONT_H
+    ld (CmdBuf + 6), a          ; DY
+    call HitNumSrcY             ; SY = 뒷면의 같은 줄
+    ld a, (HitNumX)
+    ld (CmdBuf + 0), a          ; SX
+    ld a, (HitNumGap)
+    ld (CmdBuf + 10), a         ; NY
+    ld hl, CmdBuf
+    jp SendWaitCmd
+
+; 마지막 자리를 BACK 에서 덮어 사라지게 한다.
+HitNumErase:
+    call HitNumCmd
+    ld a, (HitNumX)
+    ld (CmdBuf + 0), a          ; SX
+    ld a, (HitNumY)
+    ld (CmdBuf + 6), a          ; DY
+    call HitNumSrcY
+    ld a, FONT_H
+    ld (CmdBuf + 10), a         ; NY
+    ld hl, CmdBuf
+    jp SendWaitCmd
+
+; CmdBuf+6 의 화면 y 를 뒷면의 y 로 옮겨 SY 에 넣는다.
+HitNumSrcY:
+    ld a, (CmdBuf + 6)
+    ld l, a
+    ld h, 0
+    ld de, BACK_YOFS
+    add hl, de
+    ld (CmdBuf + 2), hl
+    ret
+
+; 세 명령의 공통 부분. DX 와 NX 는 어느 쪽이든 같다.
+HitNumCmd:
+    xor a
+    ld (CmdBuf + 1), a
+    ld (CmdBuf + 5), a
+    ld (CmdBuf + 7), a
+    ld (CmdBuf + 9), a
+    ld (CmdBuf + 11), a
+    ld (CmdBuf + 12), a         ; CLR
+    ld (CmdBuf + 13), a         ; ARG
+    ld a, (HitNumX)
+    ld (CmdBuf + 4), a          ; DX
+    ld a, HITNUM_ERW
+    ld (CmdBuf + 8), a          ; NX
+    ld a, 0xD0                  ; HMMM
+    ld (CmdBuf + 14), a
+    ret
+
+;-----------------------------------------------------------------------------
+; 맞은 몬스터를 한 번 흔든다. 크리티컬이면 좌우로 한 번씩.
+;
+; 있던 자리는 CLEAN(몬스터 없는 던전)에서 오려 지우고, 어긋난 자리에 그림만 다시
+; 찍는다. 끝나면 BACK 에서 띠를 통째로 되돌린다 - 그래야 띠에 걸친 옆 칸
+; 몬스터까지 함께 제자리로 온다.
+;
+; 흔드는 폭은 칸이 뷰포트를 벗어나지 않는 만큼으로 줄인다. 네 칸이 들어차면
+; 양끝 칸은 바깥쪽으로 갈 자리가 없어 그쪽으로는 안 흔들린다.
+;-----------------------------------------------------------------------------
+; 맞은 순간 움찔하는 폭과 뜸.
+;
+; 처음에는 8 도트로 밀고 두 프레임(0.03 초)만 두었더니 튕기듯 지나가 타격감이
+; 없었다. 지금은 밀려난 자리에 0.08 초 머물고, **반쯤 돌아온 자리를 한 번 더**
+; 거쳐 제자리로 온다. 그 중간 자리가 있어야 되돌아오는 것이지 갑자기 사라졌다
+; 나타나는 것으로 안 보인다.
+SHAKE_DX    equ 10              ; 밀려나는 최대 폭
+SHAKE_HOLD  equ 5               ; 밀려난 자리를 두는 프레임
+SHAKE_BACK  equ 2               ; 반쯤 돌아온 자리를 두는 프레임
+
+; A = 맞은 칸.
+ShakeMon:
+    ld (ShakeCell), a
+    call MonRowSize
+    ld a, (ShakeCell)
+    call CellSprPtr             ; 그림과 뱅크
+    ret c                       ; 쓰러졌으면 흔들 것이 없다
+    ld a, (ShakeCell)
+    call SlotColRow
+    call CellXY
+    call ShakeWidth
+
+    ld a, (MonRowX)             ; 오른쪽 여유
+    ld hl, MonRowW
+    add a, (hl)
+    ld b, a
+    ld a, VIEW_X + VIEW_W
+    sub b
+    ld hl, ShakeMax
+    cp (hl)
+    jr c, .gotr
+    ld a, (hl)
+.gotr:
+    ld (ShakeR), a
+    ld a, (MonRowX)             ; 왼쪽 여유
+    sub VIEW_X
+    ld hl, ShakeMax
+    cp (hl)
+    jr c, .gotl
+    ld a, (hl)
+.gotl:
+    ld (ShakeL), a
+
+    ; 칼질이 오른쪽에서 왼쪽으로 지나가므로 맞은 놈은 **왼쪽으로** 밀린다.
+    ld a, (ShakeL)
+    or a
+    jr nz, .left
+    ld a, (ShakeR)              ; 맨 왼쪽 칸이라 왼쪽으로 갈 자리가 없다
+    jr .big
+.left:
+    neg                         ; 왼쪽은 음수
+    ld c, a
+    ld a, (CritFlag)
+    or a
+    ld a, c
+    jr z, .big
+    ld b, SHAKE_HOLD            ; 치명타는 왼쪽으로 밀렸다가 오른쪽으로 되튄다
+    call ShakeFrame
+    ld a, (ShakeR)
+.big:
+    ld (ShakeBig), a
+    ld b, SHAKE_HOLD
+    call ShakeFrame
+    ld a, (ShakeBig)            ; 반쯤 돌아온 자리를 거쳐 제자리로
+    sra a                       ; sra 는 부호를 지킨다 (-10 -> -5)
+    ld b, SHAKE_BACK
+    call ShakeFrame
+    call ShakeRestore
+    ld a, SPR_FIRSTBK           ; 창을 기본 뱅크로 되돌린다
+    ld (ASC8_P3), a
+    ret
+
+; 밀려날 폭을 몬스터 크기에 맞춘다.
+;
+; 큰 놈에게 알맞은 10 도트가 작은 놈에게는 너무 크다 - 칸이 붙어 있어서 밀린
+; 만큼 옆 칸을 덮는데, 24 도트짜리를 10 도트 밀면 옆 놈이 반쯤 잘려 보인다.
+; 폭의 3/16 으로 두면 크기에 상관없이 같은 비율로 움찔한다 (72 -> 13, 24 -> 4).
+ShakeWidth:
+    ld a, (MonRowW)
+    srl a
+    srl a
+    srl a                       ; 폭 / 8
+    ld b, a
+    srl b                       ; 폭 / 16
+    add a, b
+    cp SHAKE_DX
+    jr c, .cap
+    ld a, SHAKE_DX
+.cap:
+    or a
+    jr nz, .set
+    inc a                       ; 아무리 작아도 한 도트는 움직인다
+.set:
+    ld (ShakeMax), a
+    ret
+
+;
+; 어긋난 그림을 **화면 밖 작업대(EFX)에서 먼저 짓고** 다 된 것을 한 번에 얹는다.
+; 화면에서 지우고 다시 그리면 그 사이 25 ms 동안 몬스터가 없는 화면이 보여서
+; 흔들리는 것이 아니라 깜빡이는 것으로 보였다. BACK 의 칸을 통째로 어긋난 자리에
+; 밀어 붙이는 방법도 해 봤는데, 칸 안의 벽까지 같이 밀려 벽돌이 어긋나 보였다.
+; 짓는 동안 화면에는 제자리 그림이 그대로 있으므로 아무것도 안 보인다.
+; A = 어긋남 (부호 있음), B = 몇 프레임 둘 것인가.
+ShakeFrame:
+    ld (ShakeCur), a
+    ld a, b
+    ld (ShakeHold), a
+    call ShakeSpan              ; 이번 장이 닿는 띠
+    call ShakeBuild             ; CLEAN 바탕 + 어긋난 그림 -> 작업대
+    call ShakeShow              ; 작업대 -> 화면
+    ld a, (ShakeHold)
+    ld b, a
+.wait:
+    push bc
+    call WaitVBlank
+    pop bc
+    djnz .wait
+    ret
+
+; ShakeCur 로부터 띠의 왼쪽(ShakeBX), 폭(ShakeBW), 작업대 안의 그림 자리
+; (ShakeDraw) 를 낸다. 오른쪽으로 가면 왼쪽 끝이, 왼쪽으로 가면 오른쪽 끝이
+; 제자리에 남으므로 띠는 어느 쪽이든 칸 + |어긋남| 이다.
+ShakeSpan:
+    ld a, (ShakeCur)
+    bit 7, a
+    jr nz, .left
+    ld b, a                     ; 오른쪽으로
+    ld a, (MonRowX)
+    ld (ShakeBX), a
+    ld a, b
+    ld (ShakeDraw), a
+    jr .width
+.left:
+    neg
+    ld b, a                     ; B = |어긋남|
+    ld a, (MonRowX)
+    sub b
+    ld (ShakeBX), a
+    xor a
+    ld (ShakeDraw), a
+.width:
+    ld a, (MonRowW)
+    add a, b
+    ld (ShakeBW), a
+    ret
+
+; CLEAN 에서 띠만큼 바탕을 떠 오고, 그 위에 그림을 어긋난 자리에 찍는다.
+ShakeBuild:
+    call EfxCmdBase
+    ld a, (ShakeBX)
+    add a, VIEW_W               ; CLEAN 은 뷰포트 폭만큼 오른쪽에 있다
+    ld (CmdBuf + 0), a          ; SX
+    ld a, (MonRowY)             ; SY = 뒷면의 같은 줄
+    ld l, a
+    ld h, 0
+    ld de, BACK_YOFS
+    add hl, de
+    ld (CmdBuf + 2), hl
+    ld a, SCRATCH_X
+    ld (CmdBuf + 4), a          ; DX = 작업대
+    ld hl, EFX_VY
+    ld (CmdBuf + 6), hl         ; DY
+    ld hl, CmdBuf
+    call SendWaitCmd
+
+    ; 그림은 작업대에 찍는다. y 는 EFX_VY 로, x 는 작업대 안으로 옮긴다.
+    ld a, (MonRowX)
+    ld (ShakeSaveX), a
+    ld a, SCRATCH_X
+    ld hl, ShakeDraw
+    add a, (hl)
+    ld (MonRowX), a
+    ld a, EFX_VY & 0xFF         ; RowAddr 이 y 에 더할 값
+    ld hl, MonRowY
+    sub (hl)
+    ld (DrawYOfs), a
+    ld a, 0x04                  ; 작업대도 줄 256 위라 A16 이 있어야 한다
+    ld (DrawA16), a
+    call DrawOneMon
+    xor a
+    ld (DrawYOfs), a
+    ld (DrawA16), a
+    ld a, (ShakeSaveX)
+    ld (MonRowX), a
+    ret
+
+; 작업대에서 화면의 띠로.
+ShakeShow:
+    call EfxCmdBase
+    ld a, SCRATCH_X
+    ld (CmdBuf + 0), a          ; SX
+    ld hl, EFX_VY
+    ld (CmdBuf + 2), hl         ; SY
+    ld a, (ShakeBX)
+    ld (CmdBuf + 4), a          ; DX
+    ld a, (MonRowY)
+    ld (CmdBuf + 6), a          ; DY
+    ld hl, CmdBuf
+    jp SendWaitCmd
+
+; 작업대를 오가는 명령의 공통 부분 - 크기는 띠 하나로 같다.
+EfxCmdBase:
+    xor a
+    ld (CmdBuf + 1), a
+    ld (CmdBuf + 5), a
+    ld (CmdBuf + 7), a
+    ld (CmdBuf + 9), a
+    ld (CmdBuf + 11), a
+    ld (CmdBuf + 12), a         ; CLR
+    ld (CmdBuf + 13), a         ; ARG
+    ld a, (ShakeBW)
+    ld (CmdBuf + 8), a          ; NX
+    ld a, (MonRowW)
+    ld (CmdBuf + 10), a         ; NY
+    ld a, 0xD0                  ; HMMM
+    ld (CmdBuf + 14), a
+    ret
+
+; BACK 의 칸을 화면 제자리에 되돌린다 (칼질 한 장이 끝날 때마다).
+CellRestore:
+    call ShakeCmdBase
+    ld a, (MonRowX)
+    ld (CmdBuf + 0), a          ; SX
+    ld (CmdBuf + 4), a          ; DX
+    ld a, (MonRowW)
+    ld (CmdBuf + 8), a          ; NX
+    ld hl, CmdBuf
+    jp SendWaitCmd
+
+; SX/DX/NX 만 빼고 채워 둔다 - 세로는 어느 쪽이든 칸 한 변으로 같다.
+ShakeCmdBase:
+    xor a
+    ld (CmdBuf + 1), a
+    ld (CmdBuf + 5), a
+    ld (CmdBuf + 7), a          ; DrawFront 가 뒷면에 그리면서 여기에 1 을 남긴다
+    ld (CmdBuf + 9), a
+    ld (CmdBuf + 11), a
+    ld (CmdBuf + 12), a         ; CLR
+    ld (CmdBuf + 13), a         ; ARG
+    ld a, (MonRowY)             ; SY = 뒷면의 같은 줄
+    ld l, a
+    ld h, 0
+    ld de, BACK_YOFS
+    add hl, de
+    ld (CmdBuf + 2), hl
+    ld a, (MonRowY)
+    ld (CmdBuf + 6), a          ; DY
+    ld a, (MonRowW)
+    ld (CmdBuf + 10), a         ; NY
+    ld a, 0xD0                  ; HMMM
+    ld (CmdBuf + 14), a
+    ret
+
+; 흔들기가 지나다닌 띠를 BACK 에서 통째로 되돌린다. 띠에 걸친 옆 칸 몬스터까지
+; 함께 제자리로 온다.
+ShakeRestore:
+    ld a, (MonRowX)
+    ld hl, ShakeL
+    sub (hl)
+    ld (ShakeBX), a             ; 띠의 왼쪽 화면 x
+    ld (CmdBuf + 0), a          ; SX (뒷면과 화면의 x 가 같다)
+    call ShakeCmdBase
+    ld a, (ShakeBX)
+    ld (CmdBuf + 4), a          ; DX
+    ld a, (MonRowW)             ; NX = 칸 + 양쪽으로 흔들린 만큼
+    ld hl, ShakeL
+    add a, (hl)
+    ld hl, ShakeR
+    add a, (hl)
+    ld (CmdBuf + 8), a
+    ld hl, CmdBuf
+    jp SendWaitCmd
+
+; A = 칸 -> MonRowPtr 과 뱅크를 그 칸의 그림으로 맞춘다. 못 그리면 캐리.
+; DrawMonsterRow 가 칸마다 하는 일과 같다.
+CellSprPtr:
+    call MonPtr
+    ld a, (hl)                  ; M_TYPE
+    inc hl
+    ld c, (hl)                  ; M_HP
+    inc c
+    dec c
+    scf
+    ret z                       ; 쓰러진 놈
+    cp MONSTER_N
+    ccf
+    ret c                       ; 종류가 표 밖
+    call MonSprPtr
+    ld (MonRowPtr), hl
+    or a                        ; 캐리를 지운다
+    ret
+
+; A = 칸. 발아래 게이지를 뒷면과 화면 양쪽에 찍는다. 뒷면에도 찍어야 연출을
+; 되돌릴 때 옛 게이지가 되살아나지 않는다.
+DrawHpDotsBoth:
+    push af
+    call BackOn
+    pop af
+    push af
+    call DrawHpDots
+    call BackOff
+    pop af
+    jp DrawHpDots
 
 ;-----------------------------------------------------------------------------
 ; 맞은 표시 - 몬스터 칸에 칼질 자국 세 장을 차례로 찍는다.
@@ -716,10 +1308,14 @@ SLASH_HOLD  equ 3               ; 한 장을 몇 프레임 두는가 (셋이면 
     ASSERT SLASH_N == 3         ; 아래에서 3 을 곱하는 자리가 있다
 
 ; A = 맞은 칸.
+; A = 맞은 칸, B = 친 무기의 계열 (FAM_BLADE / FAM_POLE / FAM_BOW).
 HitFlash:
+    ld c, a
+    ld a, b
+    ld (HitFam), a
+    ld a, c
     call SlotColRow
     call CellXY                 ; MonRowX/Y = 그 칸의 왼쪽 위
-    call SlashSave
     xor a
     call SlashFrame
     ld a, 1
@@ -740,19 +1336,29 @@ SlashFrame:
     call WaitVBlank
     pop bc
     djnz .wait
-    jp SlashRestore
+    jp CellRestore              ; BACK 에 제자리 그림이 있으니 떠 둘 것이 없다
 
 ;-----------------------------------------------------------------------------
-; A = 몇 번째 장. 그 그림이 든 뱅크를 걸고 MonRowPtr 에 놓는다.
-; 색인은 (마릿수-1) * SLASH_N + 장, 한 칸이 뱅크 1 + 주소 2 = 3 바이트.
+; A = 몇 번째 장. HitFam 계열의 그 그림이 든 뱅크를 걸고 MonRowPtr 에 놓는다.
+;
+; 색인은 (계열 * SLASH_GRP + 마릿수-1) * SLASH_N + 장, 한 칸이 뱅크 1 + 주소 2.
+; 곱셈은 더하기로 편다 - Mult8 이 B 와 D 를 깨서 여기서는 도리어 성가시다.
 ;-----------------------------------------------------------------------------
+    ASSERT SLASH_GRP == 5       ; 아래에서 4 를 곱해 더해 5 를 만든다
 SlashPtr:
-    ld c, a
-    ld a, (MonRowN)
-    dec a
+    ld c, a                     ; C = 장
+    ld a, (HitFam)
     ld b, a
     add a, a
-    add a, b                    ; A = (마릿수-1) * 3
+    add a, a
+    add a, b                    ; A = 계열 * 5 (= SLASH_GRP)
+    ld b, a
+    ld a, (MonRowN)
+    dec a
+    add a, b                    ; + (마릿수-1)
+    ld b, a
+    add a, a
+    add a, b                    ; * 3 (= SLASH_N)
     add a, c                    ; + 장
     ld b, a
     add a, a
@@ -769,80 +1375,3 @@ SlashPtr:
     ld (MonRowPtr), hl
     ret
 
-;-----------------------------------------------------------------------------
-; 칸(MonRowX, MonRowY, MonRowW 사각형)을 화면 밖으로 떠 두고 되돌린다.
-;
-; 화살표의 BandSave 와 하는 일은 같지만 틀을 따로 둔다. 저쪽은 띠의 크기가
-; 고정(VIEW_W x ARROW_H)이라 y 하나만 갈아 끼우면 되는데, 칸은 마릿수에 따라
-; 24~72 로 크기까지 바뀌어 넣을 자리가 넷이다. 저쪽 코드는 화살표가 지나가는
-; 길목이라 건드리지 않는다.
-;-----------------------------------------------------------------------------
-SlashSave:
-    ld hl, CmdSlashSave
-    ld a, 0                     ; SX, SY 자리
-    jr SendSlashCmd
-SlashRestore:
-    ld hl, CmdSlashRestore
-    ld a, 4                     ; DX, DY 자리
-
-; HL = 명령 틀, A = MonRowX/Y 를 넣을 바이트 자리.
-;
-; BandSave 와 같이 **끝날 때까지 기다린다.** 안 기다리면 명령 엔진이 도는
-; 중에 Z80 이 같은 VRAM 에 자국을 찍는다 - 화살표에서 그것을 실제로 겪었다.
-SendSlashCmd:
-    push af
-    ld de, CmdBuf
-    ld bc, 15
-    ldir
-    pop af
-    ld hl, CmdBuf
-    call AddA
-    ld a, (MonRowX)
-    ld (hl), a
-    inc hl
-    ld (hl), 0                  ; x, y 는 화면 안이라 상위 바이트는 늘 0
-    inc hl
-    ld a, (MonRowY)
-    ld (hl), a
-    inc hl
-    ld (hl), 0
-
-    ld hl, CmdBuf + 8           ; NX, NY = 칸 한 변
-    ld a, (MonRowW)
-    ld (hl), a
-    inc hl
-    ld (hl), 0
-    inc hl
-    ld (hl), a
-    inc hl
-    ld (hl), 0
-
-    ld a, 32
-    ld (CmdFirst), a
-    ld hl, CmdBuf
-    ld b, 15
-    call SendVdpCmd
-    jp WaitVdpCmd
-
-; R#32 부터: SX, SY, DX, DY, NX, NY, CLR, ARG, CMD
-CmdSlashSave:                   ; 칸 -> 화면 밖
-    dw 0                        ; SX <- MonRowX
-    dw 0                        ; SY <- MonRowY
-    dw 0
-    dw SLASH_VY
-    dw 0                        ; NX <- MonRowW
-    dw 0                        ; NY <- MonRowW
-    db 0
-    db 0
-    db 0xD0                     ; HMMM
-
-CmdSlashRestore:                ; 화면 밖 -> 칸
-    dw 0
-    dw SLASH_VY
-    dw 0                        ; DX <- MonRowX
-    dw 0                        ; DY <- MonRowY
-    dw 0                        ; NX <- MonRowW
-    dw 0                        ; NY <- MonRowW
-    db 0
-    db 0
-    db 0xD0                     ; HMMM

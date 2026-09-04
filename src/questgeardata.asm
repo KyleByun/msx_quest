@@ -22,6 +22,12 @@ ItemTable:
     db 0,  5, 2, 0      ; 17 POTION_MP
     db 0,  0, 0, 0      ; 18 PORTAL
 
+; --- 무기 계열 (품목 번호로 바로 짚는다) ---
+ItemFam:
+    db 0, 0, 0, 0, 0, 0, 1, 0   ; DAGGER, SHORTSWORD, LONGSWORD, GREATSWORD, MACE, WARHAMMER, STAFF, HWANDO
+    db 2, 2, 2, 2, 0, 0, 0, 0   ; GUKGUNG, LONGBOW, LIGHT_XBOW, HAND_XBOW, SHIELD, LEATHER, CHAINMAIL, HELMET
+    db 0, 0, 0   ; POTION_HP, POTION_MP, PORTAL
+
 ; --- 클래스가 쥘 수 있는 무기. 맨 앞이 처음 차는 것 ---
 ClassWeapons:
     db 2, 3, 5, 4, 1, 9, INV_EMPTY   ; FIGHTER

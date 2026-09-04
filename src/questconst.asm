@@ -39,9 +39,18 @@ PXB          equ 2              ; 한 바이트에 든 픽셀 수
 VIEW_XB      equ 8              ; 뷰포트 왼쪽의 바이트 위치
 VRAM_ROW     equ 128              ; 한 스캔라인의 VRAM 바이트 수
 
-; 정면 벽 픽셀을 놓아 둘 화면 밖 VRAM 의 첫 줄
+; 정면 벽 픽셀을 놓아 둘 화면 밖 VRAM 의 첫 줄.
+;
+; 깊이별 사각형을 **세로로 쌓아** 둔다 (UnpackFront). 그래서 차지하는
+; 줄 수는 FRONT_PIX_LEN/VRAM_ROW 가 아니다 - 폭이 FRONT_MAXW 뿐이라
+; 줄이 남고, 실제로는 그 다섯 배 가까이 쓴다. 화면 밖 VRAM 을 쓰는
+; 다른 자리는 FRONT_END_VY 아래에 두거나 x 를 FRONT_MAXW 뒤로 밀어야
+; 한다. 안 그러면 정면 벽 그림 위에 덮어써서 벽에 그 그림이 박힌다.
 FRONT_VY     equ 256
 FRONT_PIX_LEN equ 3784
+FRONT_ROWS   equ 154                ; 깊이별 줄 수의 합
+FRONT_MAXW   equ 36                ; 제일 넓은 깊이의 바이트 폭
+FRONT_END_VY equ FRONT_VY + FRONT_ROWS
 
 ; 뱅크 배치. 3 부터 그림 -> 배경 -> 정면 벽 -> 벽면 런 순서다.
 ; 그림 뱅크 수가 모드마다 다르므로(SPR_BANKS) 숫자를 박지 않고 계산한다.

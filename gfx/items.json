@@ -30,7 +30,8 @@
       "dice": [
         1,
         4
-      ]
+      ],
+      "family": "blade"
     },
     {
       "key": "SHORTSWORD",
@@ -38,7 +39,8 @@
       "dice": [
         1,
         6
-      ]
+      ],
+      "family": "blade"
     },
     {
       "key": "LONGSWORD",
@@ -46,7 +48,8 @@
       "dice": [
         1,
         8
-      ]
+      ],
+      "family": "blade"
     },
     {
       "key": "GREATSWORD",
@@ -55,7 +58,8 @@
         2,
         6
       ],
-      "two_handed": true
+      "two_handed": true,
+      "family": "blade"
     },
     {
       "key": "MACE",
@@ -63,7 +67,8 @@
       "dice": [
         1,
         6
-      ]
+      ],
+      "family": "blade"
     },
     {
       "key": "WARHAMMER",
@@ -71,7 +76,8 @@
       "dice": [
         1,
         8
-      ]
+      ],
+      "family": "blade"
     },
     {
       "key": "STAFF",
@@ -79,7 +85,8 @@
       "dice": [
         1,
         6
-      ]
+      ],
+      "family": "polearm"
     },
     {
       "key": "HWANDO",
@@ -87,7 +94,8 @@
       "dice": [
         1,
         8
-      ]
+      ],
+      "family": "blade"
     },
     {
       "key": "GUKGUNG",
@@ -96,7 +104,8 @@
         1,
         8
       ],
-      "two_handed": true
+      "two_handed": true,
+      "family": "bow"
     },
     {
       "key": "LONGBOW",
@@ -105,7 +114,8 @@
         1,
         8
       ],
-      "two_handed": true
+      "two_handed": true,
+      "family": "bow"
     },
     {
       "key": "LIGHT_XBOW",
@@ -114,7 +124,8 @@
         1,
         8
       ],
-      "two_handed": true
+      "two_handed": true,
+      "family": "bow"
     },
     {
       "key": "HAND_XBOW",
@@ -122,7 +133,8 @@
       "dice": [
         1,
         6
-      ]
+      ],
+      "family": "bow"
     },
     {
       "key": "SHIELD",

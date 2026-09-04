@@ -175,15 +175,16 @@ def build_banks(pal, nearest):
     # 칼질 자국도 여기에 함께 담는다. 그림이라 스프라이트 뱅크가 제 자리고,
     # **뱅크 사슬을 안 건드려도 된다** - BG_BANK 부터가 SPR_BANKS 로부터
     # 이어지므로 여기서 뱅크가 하나 늘면 뒤가 저절로 밀린다.
-    slash = []                  # (라벨, 자료, 크기, 몇 번째 장)
+    slash = []                  # (라벨, 자료, 계열, 크기, 몇 번째 장)
     if BPP == 8:
         import quest_slash as SL
-        for size in sorted({G.mon_layout(n)[2] for n in range(1, 6)},
-                           reverse=True):
-            W = H = size
-            for k, im in enumerate(SL.frames(size)):
-                slash.append(("SlashW%dF%d" % (size, k),
-                              to_runs_linear(im, pal, nearest), size, k))
+        for fam, famname in enumerate(SL.FAMILIES):
+            for size in sorted({G.mon_layout(n)[2] for n in range(1, 6)},
+                               reverse=True):
+                W = H = size
+                for k, im in enumerate(SL.frames(size, famname)):
+                    slash.append(("SlashF%dW%dF%d" % (fam, size, k),
+                                  to_runs_linear(im, pal, nearest), fam, size, k))
         W = H = full
 
     banks = [[]]
@@ -202,14 +203,23 @@ def build_banks(pal, nearest):
             banks[bi].append("    db " + ", ".join("0x%02X" % b for b in data[k:k + 16]))
         used[bi] += len(data)
 
-    for label, data, size, k in slash:
+    # 같은 바이트열은 한 번만 담는다. 계열끼리 그림이 겹칠 때(배선을 먼저 깔고
+    # 그림은 나중에 그리는 동안이 그렇다) 롬을 세 배로 쓰지 않게.
+    bybytes = {}
+    for label, data, fam, size, k in slash:
+        key = bytes(data)
+        if key in bybytes:
+            splace[(fam, size, k)] = bybytes[key]
+            continue
         if used[-1] + len(data) > BANK_SIZE:
             banks.append([])
             used.append(0)
         bi = len(banks) - 1
-        splace[(size, k)] = (FIRST_BANK + bi, BANK_BASE + used[bi])
-        banks[bi].append("%s:                ; 칼질 %d 픽셀 %d 번째  %d 바이트"
-                         % (label, size, k, len(data)))
+        at = (FIRST_BANK + bi, BANK_BASE + used[bi])
+        splace[(fam, size, k)] = at
+        bybytes[key] = at
+        banks[bi].append("%s:                ; %s 자국 %d 픽셀 %d 번째  %d 바이트"
+                         % (label, SL.FAMILIES[fam], size, k, len(data)))
         for j in range(0, len(data), 16):
             banks[bi].append("    db " + ", ".join("0x%02X" % b for b in data[j:j + 16]))
         used[bi] += len(data)
@@ -228,11 +238,11 @@ def build_banks(pal, nearest):
                       % (i, size, bk, SPRITES[i][1], size))
         consts.append("SPR_ADDR_%d_W%d equ 0x%04X" % (i, size, ad))
     if splace:
-        consts.append("SLASH_N      equ %d                  ; 칼질 자국 장 수"
-                      % len({k for _s, k in splace}))
-    for (size, k), (bk, ad) in sorted(splace.items()):
-        consts.append("SLASH_BANK_W%d_F%d equ %d" % (size, k, bk))
-        consts.append("SLASH_ADDR_W%d_F%d equ 0x%04X" % (size, k, ad))
+        consts.append("SLASH_N      equ %d                  ; 자국 한 벌의 장 수"
+                      % len({k for _f, _s, k in splace}))
+    for (fam, size, k), (bk, ad) in sorted(splace.items()):
+        consts.append("SLASH_BANK_F%d_W%d_F%d equ %d" % (fam, size, k, bk))
+        consts.append("SLASH_ADDR_F%d_W%d_F%d equ 0x%04X" % (fam, size, k, ad))
     for bi in range(len(banks)):
         consts.append("; 뱅크 %d: %d / %d 바이트" % (FIRST_BANK + bi, used[bi], BANK_SIZE))
     return banks, consts

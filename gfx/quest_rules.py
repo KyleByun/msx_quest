@@ -327,7 +327,8 @@ def main():
     A("PARTY_STRIDE equ 32                 ; 2 의 거듭제곱이라 색인이 시프트로 끝난다")
     fields = ["P_NAME", "P_CLASS", "P_RACE", "P_STR", "P_DEX", "P_CON", "P_INT",
               "P_WIS", "P_CHA", "P_LEVEL", "P_HP", "P_MAXHP", "P_AC", "P_ATK",
-              "P_DCNT", "P_DSIDE", "P_DMOD", "P_SPL", "P_MAXSPL", "P_GUARD"]
+              "P_DCNT", "P_DSIDE", "P_DMOD", "P_SPL", "P_MAXSPL", "P_GUARD",
+              "P_WFAM"]
     NAME_LEN = 12
     off = 0
     for f in fields:
@@ -558,14 +559,20 @@ def main():
                 A("    db SPR_BANK_%d_W%d" % (i, w))
                 A("    dw SPR_ADDR_%d_W%d" % (i, w))
         A("")
-        A("; 칼질 자국. 색인은 (마릿수-1)*SLASH_N + 장. 크기는 몬스터와 같다.")
+        A("; 맞은 자국. 무기 계열마다 다른 그림이고, 크기는 몬스터와 같다.")
+        A("; 색인은 (계열*%d + 마릿수-1)*SLASH_N + 장, 한 칸이 뱅크 1 + 주소 2." % maxgrp)
+        A("SLASH_GRP    equ %d                 ; 계열 하나가 도는 마릿수" % maxgrp)
         A("SlashTab:")
-        for n in range(1, maxgrp + 1):
-            w = G.mon_layout(n)[2]
-            A("    ; %d 마리 (%d 픽셀)" % (n, w))
-            for k in range(3):
-                A("    db SLASH_BANK_W%d_F%d" % (w, k))
-                A("    dw SLASH_ADDR_W%d_F%d" % (w, k))
+        for fam, famname in enumerate(("칼", "창", "활")):
+            A("    ; --- %s 계열 ---" % famname)
+            for n in range(1, maxgrp + 1):
+                w = G.mon_layout(n)[2]
+                A("    ; %d 마리 (%d 픽셀)" % (n, w))
+                for k in range(3):
+                    A("    db SLASH_BANK_F%d_W%d_F%d" % (fam, w, k))
+                    A("    dw SLASH_ADDR_F%d_W%d_F%d" % (fam, w, k))
+        # SlashPtr 이 AddA 로 8 비트 색인을 쓴다. 표가 256 바이트를 넘으면 조용히 감긴다.
+        A("    ASSERT FAM_N * SLASH_GRP * SLASH_N * 3 <= 256")
         A("")
         A("; 마릿수별 배치. gfx/quest_geom.py 의 mon_layout 이 정한 값이다.")
         for label, k, note in (("MonSprW", 2, "한 마리의 폭(=높이)"),

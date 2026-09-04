@@ -414,13 +414,19 @@ DamageMonster:
     ld (hl), a
     IFDEF SCREEN8                ; (TmpType 은 맞는 칸 번호다)
     ld a, (TmpType)             ; 발아래 게이지를 그 자리에서 고친다. 던전을
-    call DrawHpDots             ; 다시 그릴 때까지 두면 한 라운드 내내 옛 값이
-    ld a, (TmpType)             ; 보인다.
-    call HitFlash                ; 가운데에 흰 마름모 섬광 (지우기 없음)
+    call DrawHpDotsBoth         ; 다시 그릴 때까지 두면 한 라운드 내내 옛 값이
+    ld hl, (FightPtr)           ; 보인다.
+    ld de, P_WFAM               ; 자국은 친 사람이 든 무기의 계열을 따른다
+    add hl, de
+    ld b, (hl)
+    ld a, (TmpType)
+    call HitFlash                ; 자국 세 장
+    ld a, (TmpType)
+    call ShakeMon                ; 한 번 흔든다 (치명타면 좌우로)
     ld a, (TmpDmg)
     ld b, a
     ld a, (TmpType)
-    jp ShowHitNum                ; 머리 위에 "-N" 을 찍는다
+    jp FloatHitNum               ; "-N" 이 몸에서 떠올라 사라진다
     ELSE
     ret
     ENDIF

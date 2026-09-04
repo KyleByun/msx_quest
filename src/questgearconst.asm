@@ -8,6 +8,12 @@ I_A          equ 1                 ; 무기 개수 / 방어구 AC / 물약 크�
 I_B          equ 2                 ; 무기 면 / 물약 효과 종류
 I_TWOH       equ 3                 ; 양손이면 방패를 못 든다
 
+; 무기 계열. 맞았을 때 나는 자국이 이것으로 갈린다 (ItemFam 표).
+FAM_BLADE    equ 0                 ; 검, 도, 둔기
+FAM_POLE     equ 1                 ; 창, 봉 - 아래서 위로 길게
+FAM_BOW      equ 2                 ; 활, 쇠뇌 - 화살이 날아온다
+FAM_N        equ 3
+
 SLOT_USE     equ 0
 SLOT_WEAPON  equ 1
 SLOT_SHIELD  equ 2

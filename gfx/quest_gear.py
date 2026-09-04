@@ -38,6 +38,13 @@ SLOT_NAME = {"use": SLOT_USE, "weapon": SLOT_WEAPON, "shield": SLOT_SHIELD,
 EFF_NONE, EFF_HP, EFF_MP = 0, 1, 2
 EFF_NAME = {"none": EFF_NONE, "hp": EFF_HP, "mp": EFF_MP}
 
+# 무기 계열 - 맞았을 때 어떤 자국이 나는가를 정한다.
+#
+# **0 이 칼이다.** 기록이 0 으로 비어 있어도 칼자국이 나게 해서, 계열을 안 넣은
+# 무기나 초기화를 빠뜨린 자리가 표 밖을 짚지 않게 한다.
+FAM_BLADE, FAM_POLE, FAM_BOW = 0, 1, 2
+FAM_NAME = {"blade": FAM_BLADE, "polearm": FAM_POLE, "bow": FAM_BOW}
+
 
 def load():
     """items.json -> (품목, 클래스별 무기, 방패 여부, 차례, 설정).
@@ -69,10 +76,17 @@ def load():
         for label, v in (("A", a), ("B", b)):
             if not isinstance(v, int) or not 0 <= v <= 255:
                 bad.append("%s 의 %s 가 %r 이다. 한 바이트에 들어가야 한다." % (key, label, v))
-        items.append((key, slot, a, b, 1 if it.get("two_handed") else 0))
+        fam = FAM_NAME.get(it.get("family", "blade"))
+        if fam is None:
+            bad.append("%s 의 family %r 이 %s 중에 없다"
+                       % (key, it.get("family"), "/".join(sorted(FAM_NAME))))
+            fam = FAM_BLADE
+        elif slot != SLOT_WEAPON and it.get("family"):
+            bad.append("%s 는 무기가 아닌데 family 가 붙어 있다" % key)
+        items.append((key, slot, a, b, 1 if it.get("two_handed") else 0, fam))
 
     seen = set()
-    for key, _, _, _, _ in items:
+    for key, _, _, _, _, _ in items:
         if key in seen:
             bad.append("품목 열쇠 %s 가 두 번 나온다" % key)
         seen.add(key)
@@ -126,6 +140,12 @@ def main():
          "I_B          equ 2                 ; 무기 면 / 물약 효과 종류",
          "I_TWOH       equ 3                 ; 양손이면 방패를 못 든다",
          "",
+         "; 무기 계열. 맞았을 때 나는 자국이 이것으로 갈린다 (ItemFam 표).",
+         "FAM_BLADE    equ %d                 ; 검, 도, 둔기" % FAM_BLADE,
+         "FAM_POLE     equ %d                 ; 창, 봉 - 아래서 위로 길게" % FAM_POLE,
+         "FAM_BOW      equ %d                 ; 활, 쇠뇌 - 화살이 날아온다" % FAM_BOW,
+         "FAM_N        equ %d" % len(FAM_NAME),
+         "",
          "SLOT_USE     equ %d" % SLOT_USE,
          "SLOT_WEAPON  equ %d" % SLOT_WEAPON,
          "SLOT_SHIELD  equ %d" % SLOT_SHIELD,
@@ -150,8 +170,18 @@ def main():
          "",
          "; --- 품목: 자리, A, B, 양손 ---",
          "ItemTable:"]
-    for name, slot, a, b, twoh in ITEMS:
+    for name, slot, a, b, twoh, _fam in ITEMS:
         D.append("    db %d, %2d, %d, %d      ; %d %s" % (slot, a, b, twoh, idx[name], name))
+    D.append("")
+
+    # 계열은 무기에만 쓰므로 ItemTable 을 넓히지 않고 따로 둔다 - ITEM_STRIDE 가
+    # 4 라야 색인이 시프트로 끝난다.
+    D.append("; --- 무기 계열 (품목 번호로 바로 짚는다) ---")
+    D.append("ItemFam:")
+    for i in range(0, len(ITEMS), 8):
+        row = ITEMS[i:i + 8]
+        D.append("    db " + ", ".join(str(it[5]) for it in row)
+                 + "   ; %s" % ", ".join(it[0] for it in row))
     D.append("")
 
     D.append("; --- 클래스가 쥘 수 있는 무기. 맨 앞이 처음 차는 것 ---")

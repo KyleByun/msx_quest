@@ -30,6 +30,7 @@ P_DMOD       equ 27
 P_SPL        equ 28 
 P_MAXSPL     equ 29 
 P_GUARD      equ 30 
+P_WFAM       equ 31 
 NAME_LEN     equ 12
 
 ; --- 몬스터 기록 (한 마리 4 바이트) -------------------------------------

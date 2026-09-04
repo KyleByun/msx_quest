@@ -178,6 +178,8 @@ StatPtr     ds 2                ; 그 사람의 기록
 GearWho     ds 1
 GearIdx     ds 1
 GearItem    ds 1
+GearWpn     ds 1                ; ApplyGear 이 보고 있는 자리의 품목 번호
+GearFam     ds 1                ; 찬 무기의 계열 (맨손이면 칼)
 GearSlot    ds 1
 GearTo      ds 1
 GearAmt     ds 1

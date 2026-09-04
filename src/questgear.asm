@@ -349,6 +349,7 @@ ApplyGear:
     ld (GearDside), a
     xor a
     ld (GearAc), a
+    ld (GearFam), a             ; FAM_BLADE - 맨손도 칼자국으로 둔다
 
     ld a, SLOT_WEAPON
 .slot:
@@ -364,6 +365,7 @@ ApplyGear:
     call InvItem
     cp INV_EMPTY
     jr z, .nextslot
+    ld (GearWpn), a             ; 계열을 볼 때 품목 번호가 다시 필요하다
     call ItemPtr
     inc hl
     ld b, (hl)                  ; I_A
@@ -376,6 +378,11 @@ ApplyGear:
     ld (GearDcnt), a
     ld a, c
     ld (GearDside), a
+    ld a, (GearWpn)             ; 맞은 자국이 무기 계열마다 다르다
+    ld hl, ItemFam
+    call AddA
+    ld a, (hl)
+    ld (GearFam), a
     jr .nextslot
 .armour:
     ld a, (GearAc)
@@ -394,6 +401,12 @@ ApplyGear:
     ld (hl), a
     inc hl
     ld a, (GearDside)
+    ld (hl), a
+
+    ld hl, (GearPty)            ; 무기 계열
+    ld de, P_WFAM
+    add hl, de
+    ld a, (GearFam)
     ld (hl), a
 
     ld hl, (GearPty)            ; AC = 12 + 민첩보정 + 방어구

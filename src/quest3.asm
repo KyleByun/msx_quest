@@ -97,6 +97,14 @@ curY        ds 1                ; 지금 칠하고 있는 스캔라인
 addrOk      ds 1                ; VRAM 주소를 이미 잡아 두었는가
 resumeX     ds 1                ; 건너뛴 뒤 다시 시작할 바이트 위치
 blockDepth  ds 1                ; 앞으로 몇 칸 만에 벽에 막히는가 (없으면 MAXD+1)
+
+; 더블버퍼링 - 그리는 면을 화면에서 뒷면으로 돌리는 손잡이.
+; 뷰포트에 그리는 코드는 **하나도 안 고친다.** CPU 로 쓰는 길은 RowAddr 과
+; SetVramWrite 둘뿐이고 VDP 명령은 DrawFront 하나뿐이라, 그 셋만 아래 값을
+; 얹으면 같은 코드가 뒷면에 그린다. 자세한 것은 questmonrow.asm 의 BACK_VY.
+DrawYOfs    ds 1                ; RowAddr 이 y 에 더할 값 (뒷면이면 BACK_YOFS)
+DrawA16     ds 1                ; SetVramWrite 이 R#14 에 얹을 A16 (0 또는 4)
+CmdYOfs     ds 2                ; VDP 명령의 y 에 더할 값 (0 또는 BACK_YOFS)
 frontH      ds 1                ; 아래 셋은 UnpackFront 가 부팅 때만 쓴다
 frontW      ds 1
 frontN      ds 1
@@ -181,6 +189,8 @@ GearTo      ds 1
 GearAmt     ds 1
 GearMax     ds 1
 GearAc      ds 1
+GearWpn     ds 1                ; ApplyGear 이 보고 있는 자리의 품목 번호
+GearFam     ds 1                ; 찬 무기의 계열 (맨손이면 칼)
 GearDcnt    ds 1
 GearDside   ds 1
 GearPty     ds 2
@@ -247,7 +257,23 @@ DotIdx      ds 1                ; 몇 번째 점
 DotLit      ds 1                ; 빨간 점 수
 DotMax      ds 1
 DotWho      ds 1
-HitDmg      ds 1                ; ShowHitNum 이 찍는 중인 피해값
+HitFam      ds 1                ; 이번에 친 무기의 계열 (자국 그림을 고른다)
+HitDmg      ds 1                ; 떠오르는 숫자가 찍는 중인 피해값
+HitNumX     ds 1                ; 그 숫자의 자리
+HitNumY     ds 1
+HitNumLeft  ds 1                ; 앞으로 더 올라갈 도트 수
+HitNumGap   ds 1                ; 뜨면서 아래에 남은 줄 수 (0 이면 첫 장)
+ShakeCell   ds 1                ; 흔드는 칸
+ShakeL      ds 1                ; 왼쪽/오른쪽으로 갈 수 있는 폭
+ShakeR      ds 1
+ShakeCur    ds 1                ; 이번 장의 어긋남 (부호 있음)
+ShakeMax    ds 1                ; 이 크기의 몬스터가 밀려날 폭
+ShakeHold   ds 1                ; 이번 장을 몇 프레임 두는가
+ShakeBig    ds 1                ; 제일 크게 밀려난 자리 (반쯤 돌아올 때 쓴다)
+ShakeBX     ds 1                ; 이번 장이 닿는 띠의 왼쪽 화면 x
+ShakeBW     ds 1                ; 그 띠의 폭
+ShakeDraw   ds 1                ; 작업대 안에서 그림을 놓을 x
+ShakeSaveX  ds 1                ; 작업대에 찍는 동안 지켜 두는 제자리 x
 MonSelCol   ds 1                ; 지금 다루는 칸의 열
 MonSelRow   ds 1                ; 그 칸의 줄
 MonRowX     ds 1                ; 지금 그리는 칸의 왼쪽 끝
@@ -255,7 +281,13 @@ MonRowY     ds 1                ; 대열의 윗줄
 MonRowPtr   ds 2                ; 이 크기의 그림 자료
 ArrowX      ds 1
 ArrowY      ds 1
-CmdBuf      ds 15               ; y 를 갈아 끼운 VDP 명령 블록
+; y 를 갈아 끼운 VDP 명령 블록. **여러 곳이 돌려 쓴다** - 정면 벽, 화살표 띠,
+; 칼질, 흔들기, 떠오르는 숫자. 그래서 어느 길이든 열다섯 바이트를 **전부** 채워야
+; 한다. 틀을 통째로 ldir 하고 몇 자리만 갈아 끼우거나(정면 벽, 화살표, 숫자),
+; 공통 부분을 채우는 루틴을 거치거나(EfxCmdBase, ShakeCmdBase) 둘 중 하나다.
+; 남겨 두면 지난번 값이 그대로 나간다 - DrawFront 가 뒷면에 그리며 DY 상위에
+; 1 을 남기는 바람에 흔들기가 화면 대신 줄 256 위로 복사할 뻔했다.
+CmdBuf      ds 15
 
 ; 전투 진행
 MonCount    ds 1                ; 이번에 나온 마릿수
@@ -463,11 +495,7 @@ MainLoop:
     jr z, .idle
     xor a
     ld (needDraw), a
-    call RenderDungeon
-    ld a, (BattleOn)            ; 전투 중이면 그 위에 무리를 얹는다.
-    or a                        ; 던전을 먼저 그려야 지난 그림이 지워진다.
-    jr z, .idle
-    call DrawMonsterRow
+    call ComposeView            ; 던전을 그리는 자리는 여기 하나뿐이다
 .idle:
     call ReadInput
     call HandleInput
@@ -958,8 +986,16 @@ DrawFront:
     cp MAXD + 1
     ret nc                      ; 끝까지 안 막혔으면 할 일이 없다
     call FrontCmdFor            ; HL = 그 깊이의 명령 블록
+    ld de, CmdBuf               ; 뒷면에 그릴 때 DY 를 옮겨야 하므로 사본에 편다
+    ld bc, 15
+    ldir
+    ld hl, (CmdYOfs)
+    ld de, (CmdBuf + 6)         ; DY
+    add hl, de
+    ld (CmdBuf + 6), hl
     ld a, 32                    ; R#32 부터: SX, SY, DX, DY, NX, NY, CLR, ARG, CMD
     ld (CmdFirst), a
+    ld hl, CmdBuf
     ld b, 15
     call SendVdpCmd
     jp WaitVdpCmd
@@ -1855,12 +1891,17 @@ WaitVBlank:
 ; SCREEN 5 는 한 줄이 128 바이트, SCREEN 8 은 256 바이트다. 8bpp 쪽이 오히려
 ; 짧다 - 시프트가 통째로 없어지고 "상위 = y, 하위 = 0" 이면 끝난다.
 RowAddr:
+    push af                     ; A 도 플래그도 그대로 돌려준다 - 부르는 쪽이
+    ld h, a                     ; 여럿이고 뒤에서 곧바로 쓰는 데가 있다
+    ld a, (DrawYOfs)            ; 뒷면에 그리는 중이면 그만큼 아래로.
+    add a, h                    ; 넘친 자리(줄 256 위)는 SetVramWrite 의 A16 이 맡는다.
     ld h, a
     ld l, 0
     IFNDEF SCREEN8
     srl h
     rr l
     ENDIF
+    pop af
     ret
 
 ; A = 픽셀 x -> A = 바이트 x
@@ -1896,6 +1937,9 @@ SetVramWrite:
     rlca
     rlca
     and 0x03
+    ld c, a
+    ld a, (DrawA16)             ; 뒷면은 줄 256 위라 A16 이 있어야 짚힌다
+    or c
     ld c, 14
     call WriteVdpReg
     ld a, l
