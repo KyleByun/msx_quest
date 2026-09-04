@@ -61,11 +61,11 @@ try {
     # 음악은 **늘** 굽는다. 전투곡은 --title 과 상관없이 울려야 한다.
     # 결과를 wav 로 들어 볼 수도 있다: gfx/psg_music.py battle --wav
     # `쓰임=파일`. 곡을 갈 때 여기만 고치면 asm 은 MUS_BATTLE 그대로 쓴다.
-    # 전투곡은 Obsidian_Keep.mml (basic pitch 가 mp3 에서 뽑아 준 악보)로 굽는다.
-    # 같은 이름의 .mml 이 있으면 .mp3 대신 그것을 읽는다 - 음이 적혀 있으니
-    # FFT 로 알아맞힐 때 나던 반음 떨림이 없다.
+    # 전투곡은 Obsidian_Keep.bas - MSX-BASIC 의 PLAY 문으로 적은 악보다.
+    # A$/B$/C$ 세 성부가 그대로 PSG 세 채널이 된다. 확장자를 붙여 고른다
+    # (같은 이름의 .mml/.mp3 도 있다 - psg_music.py 머리말 참고).
     & uv run --with pillow --with numpy python "$PSScriptRoot\gfx\psg_music.py" `
-        title battle=Obsidian_Keep
+        title battle=Obsidian_Keep.bas
     if ($LASTEXITCODE -ne 0) { throw "psg_music.py 실패" }
     if ($Title) {
         & uv run --with pillow python "$PSScriptRoot\gfx\quest_title.py"

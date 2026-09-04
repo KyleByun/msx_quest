@@ -124,7 +124,7 @@ HERO_BASE_AC equ 12
 ; --- 몬스터 그림이 어느 뱅크 어디에 있는가 -----------------------------
 SPR_W        equ 96
 SPR_H        equ 96
-SPR_BANKS    equ 4
+SPR_BANKS    equ 5
 SPR_FIRSTBK  equ 3
 SPR_BANK_0_W24 equ 3                  ; GOBLIN 24px
 SPR_ADDR_0_W24 equ 0xAB6F
@@ -156,7 +156,33 @@ SPR_BANK_4_W72 equ 5                  ; COBRA 72px
 SPR_ADDR_4_W72 equ 0xAD29
 SPR_BANK_5_W72 equ 6                  ; MIMIC 72px
 SPR_ADDR_5_W72 equ 0xAAA9
+SLASH_N      equ 3                  ; 칼질 자국 장 수
+SLASH_BANK_W24_F0 equ 7
+SLASH_ADDR_W24_F0 equ 0xA5C9
+SLASH_BANK_W24_F1 equ 7
+SLASH_ADDR_W24_F1 equ 0xA621
+SLASH_BANK_W24_F2 equ 7
+SLASH_ADDR_W24_F2 equ 0xA6C0
+SLASH_BANK_W32_F0 equ 7
+SLASH_ADDR_W32_F0 equ 0xA3C5
+SLASH_BANK_W32_F1 equ 7
+SLASH_ADDR_W32_F1 equ 0xA448
+SLASH_BANK_W32_F2 equ 7
+SLASH_ADDR_W32_F2 equ 0xA54A
+SLASH_BANK_W48_F0 equ 7
+SLASH_ADDR_W48_F0 equ 0xA000
+SLASH_BANK_W48_F1 equ 7
+SLASH_ADDR_W48_F1 equ 0xA0F4
+SLASH_BANK_W48_F2 equ 7
+SLASH_ADDR_W48_F2 equ 0xA2EA
+SLASH_BANK_W72_F0 equ 6
+SLASH_ADDR_W72_F0 equ 0xB8AF
+SLASH_BANK_W72_F1 equ 6
+SLASH_ADDR_W72_F1 equ 0xBA66
+SLASH_BANK_W72_F2 equ 6
+SLASH_ADDR_W72_F2 equ 0xBE51
 ; 뱅크 3: 5936 / 8192 바이트
 ; 뱅크 4: 5883 / 8192 바이트
 ; 뱅크 5: 6733 / 8192 바이트
-; 뱅크 6: 6319 / 8192 바이트
+; 뱅크 6: 8184 / 8192 바이트
+; 뱅크 7: 1806 / 8192 바이트

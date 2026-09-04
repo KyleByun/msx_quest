@@ -36,6 +36,14 @@ ARROW_COL   equ 0xFC            ; GRB332 로 노랑 (G 7, R 7, B 0). 던전에 �
 ; 정면 벽 픽셀(FRONT_VY 부터 FRONT_PIX_LEN 바이트) 뒤에 두어야 한다.
 SAVE_VY     equ 300
     ASSERT SAVE_VY >= FRONT_VY + (FRONT_PIX_LEN + VRAM_ROW - 1) / VRAM_ROW
+
+; 칼질하는 동안 칸을 통째로 떠 둘 자리. 화살표 띠(SAVE_VY, ARROW_H 줄) 뒤에
+; 놓는다. 칸은 최대 72x72 이지만 96 까지 잡아 둔다 - mon_layout 이 바뀌어도
+; 여기서 걸리지 않게.
+SLASH_VY    equ 310
+SLASH_MAXW  equ 96
+    ASSERT SLASH_VY >= SAVE_VY + ARROW_H
+    ASSERT SLASH_VY + SLASH_MAXW <= 512         ; VRAM 128KB = 512 줄
     ASSERT MON_SCALE_N <= MON_N
     ASSERT ARROW_W <= VIEW_W / MON_MAX_COLS
 
@@ -691,106 +699,150 @@ ShowHitNum:
     jp PutNumR
 
 ;-----------------------------------------------------------------------------
-; 맞은 표시 - 몬스터 가운데에 흰 마름모(섬광)를 세 번 키우며 찍는다.
+; 맞은 표시 - 몬스터 칸에 칼질 자국 세 장을 차례로 찍는다.
 ;
-; 화살표(ShowArrow/DrawArrowNow)와 같은 수법이다. 뒤 프레임이 앞 프레임을
-; **완전히 감싸므로**(반지름이 매번 커진다) 지우지 않고 그 위에 덧그리기만
-; 하면 앞 프레임 자국이 하나도 안 남는다 - 화면 밖 버퍼도, 되돌리기도,
-; 몬스터를 다시 그리는 것도 필요 없다. 흔들기가 몬스터 자체를 옮기려다
-; 뒷장을 통째로 조립해야 했던 것과 다른 점이 이것이다.
+; 전에는 흰 마름모를 반지름 2/4/6 으로 키우며 세 번 찍었다. 지우지 않아도
+; 됐던 것은 뒤 프레임이 앞 프레임을 **통째로 덮었기** 때문이다(화살표와 같은
+; 수법). 칼질은 그렇지 않다 - 2 번이 1 번을 안 덮고 3 번은 오히려 옅어진다.
+; 그래서 칸을 화면 밖에 떠 두었다가 장마다 되돌린다.
 ;
-; 마지막(가장 큰) 프레임은 다음 완전 다시 그리기(이동/회전/전투 끝)까지
-; 그대로 남는다 - ShowHitNum 의 "-N" 과 같은 방식이다.
+; 자국은 몬스터 그림과 **같은 꼴, 같은 크기**다. 그래서 그리는 것은
+; DrawOneMon 을 그대로 쓴다 - 투명한 곳은 안 건드리므로 몬스터가 비쳐 보인다.
+;
+; 마지막에 칸을 되돌리므로 자국은 안 남는다. 맞았다는 표시는 발아래 HP 점과
+; 머리 위 "-N" 이 계속 하고 있다 (마름모는 다음 다시 그리기까지 남았었다).
 ;-----------------------------------------------------------------------------
-FLASH_COL   equ 0xFF            ; 흰색(GRB332 G7 R7 B3) - 던전에 없는 색
+SLASH_HOLD  equ 3               ; 한 장을 몇 프레임 두는가 (셋이면 0.15 초)
+    ASSERT SLASH_N == 3         ; 아래에서 3 을 곱하는 자리가 있다
 
 ; A = 맞은 칸.
 HitFlash:
     call SlotColRow
     call CellXY                 ; MonRowX/Y = 그 칸의 왼쪽 위
-    ld a, (MonRowW)             ; 몬스터는 정사각형이라 가운데는 왼쪽위 + 폭/2
-    srl a
-    ld c, a
-    ld hl, MonRowX
-    add a, (hl)
-    ld (FlashX), a
-    ld a, c
-    ld hl, MonRowY
-    add a, (hl)
-    ld (FlashY), a
-
+    call SlashSave
+    xor a
+    call SlashFrame
+    ld a, 1
+    call SlashFrame
     ld a, 2
-    call DrawFlash
-    ld b, 2
-    call FlashWait
-    ld a, 4
-    call DrawFlash
-    ld b, 2
-    call FlashWait
-    ld a, 6
-    jp DrawFlash
+    call SlashFrame
+    ld a, SPR_FIRSTBK           ; 창을 기본 뱅크로 되돌린다
+    ld (ASC8_P3), a
+    ret
 
-FlashWait:
+; A = 몇 번째 장. 찍고, 잠깐 두고, 칸을 되돌린다.
+SlashFrame:
+    call SlashPtr
+    call DrawOneMon
+    ld b, SLASH_HOLD
+.wait:
     push bc
     call WaitVBlank
     pop bc
-    djnz FlashWait
+    djnz .wait
+    jp SlashRestore
+
+;-----------------------------------------------------------------------------
+; A = 몇 번째 장. 그 그림이 든 뱅크를 걸고 MonRowPtr 에 놓는다.
+; 색인은 (마릿수-1) * SLASH_N + 장, 한 칸이 뱅크 1 + 주소 2 = 3 바이트.
+;-----------------------------------------------------------------------------
+SlashPtr:
+    ld c, a
+    ld a, (MonRowN)
+    dec a
+    ld b, a
+    add a, a
+    add a, b                    ; A = (마릿수-1) * 3
+    add a, c                    ; + 장
+    ld b, a
+    add a, a
+    add a, b                    ; A = 색인 * 3 (한 칸의 바이트 수)
+    ld hl, SlashTab
+    call AddA
+    ld a, (hl)
+    ld (ASC8_P3), a
+    inc hl
+    ld a, (hl)
+    inc hl
+    ld h, (hl)
+    ld l, a
+    ld (MonRowPtr), hl
     ret
 
 ;-----------------------------------------------------------------------------
-; DrawFlash - A = 반지름. (FlashX, FlashY) 가운데로 채운 마름모를 찍는다.
+; 칸(MonRowX, MonRowY, MonRowW 사각형)을 화면 밖으로 떠 두고 되돌린다.
 ;
-; 줄마다 반폭 = 반지름 - |dy| (dy 는 -반지름..+반지름). 마름모 안을 outi 없이
-; 그냥 out 반복으로 채운다 - 한 줄이 최대 13 픽셀이라 짧다.
+; 화살표의 BandSave 와 하는 일은 같지만 틀을 따로 둔다. 저쪽은 띠의 크기가
+; 고정(VIEW_W x ARROW_H)이라 y 하나만 갈아 끼우면 되는데, 칸은 마릿수에 따라
+; 24~72 로 크기까지 바뀌어 넣을 자리가 넷이다. 저쪽 코드는 화살표가 지나가는
+; 길목이라 건드리지 않는다.
 ;-----------------------------------------------------------------------------
-DrawFlash:
-    ld (FlashR), a
-    ld b, a
-    add a, a
-    inc a                        ; A = 2R + 1 = 이 마름모의 총 줄 수
-    ld (FlashRows), a
-    ld a, b
-    neg                          ; A = -R (2의 보수)
-    ld (FlashDY), a
-.row:
-    ld a, (FlashDY)
-    or a
-    jp p, .absdone
-    neg
-.absdone:
-    ld b, a                     ; B = |dy|
-    ld a, (FlashR)
-    sub b
-    jr nc, .hwok
-    xor a
-.hwok:
-    ld c, a                     ; C = 반폭
-    add a, a
-    inc a                       ; A = 이 줄의 픽셀 수 (반폭*2 + 1)
-    ld b, a
+SlashSave:
+    ld hl, CmdSlashSave
+    ld a, 0                     ; SX, SY 자리
+    jr SendSlashCmd
+SlashRestore:
+    ld hl, CmdSlashRestore
+    ld a, 4                     ; DX, DY 자리
 
-    ld a, (FlashX)
-    sub c
-    ld e, a                     ; E = x0 = FlashX - 반폭
-    ld a, (FlashY)
-    ld hl, FlashDY
-    add a, (hl)                 ; A = FlashY + dy
+; HL = 명령 틀, A = MonRowX/Y 를 넣을 바이트 자리.
+;
+; BandSave 와 같이 **끝날 때까지 기다린다.** 안 기다리면 명령 엔진이 도는
+; 중에 Z80 이 같은 VRAM 에 자국을 찍는다 - 화살표에서 그것을 실제로 겪었다.
+SendSlashCmd:
+    push af
+    ld de, CmdBuf
+    ld bc, 15
+    ldir
+    pop af
+    ld hl, CmdBuf
+    call AddA
+    ld a, (MonRowX)
+    ld (hl), a
+    inc hl
+    ld (hl), 0                  ; x, y 는 화면 안이라 상위 바이트는 늘 0
+    inc hl
+    ld a, (MonRowY)
+    ld (hl), a
+    inc hl
+    ld (hl), 0
 
-    push bc                     ; 화살표도 이 두 호출을 push/pop 으로 감싼다 -
-    call RowAddrB               ; RowAddrB/SetVramWrite 가 BC 를 건드릴 수 있다.
-    call SetVramWrite           ; 안 지키면 B(픽셀 수)가 깨진다.
-    pop bc
+    ld hl, CmdBuf + 8           ; NX, NY = 칸 한 변
+    ld a, (MonRowW)
+    ld (hl), a
+    inc hl
+    ld (hl), 0
+    inc hl
+    ld (hl), a
+    inc hl
+    ld (hl), 0
 
-    ld c, VDP_DATA
-    ld a, FLASH_COL
-.pix:
-    out (c), a
-    nop
-    djnz .pix
+    ld a, 32
+    ld (CmdFirst), a
+    ld hl, CmdBuf
+    ld b, 15
+    call SendVdpCmd
+    jp WaitVdpCmd
 
-    ld hl, FlashDY               ; dy 를 R 과 비교하려면 부호 있는 비교가
-    inc (hl)                     ; 필요한데, dy 가 음수인 동안 8비트 부호없는
-    ld hl, FlashRows             ; cp 는 어긋난다(-5 를 251 로 본다) - 그래서
-    dec (hl)                     ; dy 대신 **남은 줄 수**(늘 0 이상의 작은 값)
-    jp nz, .row                  ; 를 세어 0 이 되면 멈춘다. 부호 비교가 아예
-    ret                          ; 필요 없어진다.
+; R#32 부터: SX, SY, DX, DY, NX, NY, CLR, ARG, CMD
+CmdSlashSave:                   ; 칸 -> 화면 밖
+    dw 0                        ; SX <- MonRowX
+    dw 0                        ; SY <- MonRowY
+    dw 0
+    dw SLASH_VY
+    dw 0                        ; NX <- MonRowW
+    dw 0                        ; NY <- MonRowW
+    db 0
+    db 0
+    db 0xD0                     ; HMMM
+
+CmdSlashRestore:                ; 화면 밖 -> 칸
+    dw 0
+    dw SLASH_VY
+    dw 0                        ; DX <- MonRowX
+    dw 0                        ; DY <- MonRowY
+    dw 0                        ; NX <- MonRowW
+    dw 0                        ; NY <- MonRowW
+    db 0
+    db 0
+    db 0xD0                     ; HMMM

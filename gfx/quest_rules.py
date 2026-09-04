@@ -558,6 +558,15 @@ def main():
                 A("    db SPR_BANK_%d_W%d" % (i, w))
                 A("    dw SPR_ADDR_%d_W%d" % (i, w))
         A("")
+        A("; 칼질 자국. 색인은 (마릿수-1)*SLASH_N + 장. 크기는 몬스터와 같다.")
+        A("SlashTab:")
+        for n in range(1, maxgrp + 1):
+            w = G.mon_layout(n)[2]
+            A("    ; %d 마리 (%d 픽셀)" % (n, w))
+            for k in range(3):
+                A("    db SLASH_BANK_W%d_F%d" % (w, k))
+                A("    dw SLASH_ADDR_W%d_F%d" % (w, k))
+        A("")
         A("; 마릿수별 배치. gfx/quest_geom.py 의 mon_layout 이 정한 값이다.")
         for label, k, note in (("MonSprW", 2, "한 마리의 폭(=높이)"),
                                ("MonColsTab", 0, "한 줄에 몇 칸"),

@@ -3,10 +3,15 @@
   uv run --with numpy python gfx/psg_music.py title battle=Final_Sector_Pursuit
   uv run --with numpy python gfx/psg_music.py battle --wav   굽지 않고 들어만 본다
 
-원본은 **mp3 또는 mml** 이다. 같은 이름의 .mml 이 있으면 그쪽을 쓴다.
-mp3 는 FFT 로 음을 **알아맞히는** 것이라 봉우리가 이웃 반음을 오가면 음이
-흔들린다(HOLD/MIN_FRAMES 가 그것을 눌러 준다). mml 은 음이 이미 적혀 있으므로
-알아맞힐 것이 없다 - 흔들림이 아예 없고, 대신 채널 하나짜리 홑가락이다.
+원본은 **.bas, .mml, .mp3** 셋 중 하나다. 확장자를 붙여 주면 그것을 쓰고
+(`battle=Obsidian_Keep.bas`), 안 붙이면 .bas > .mml > .mp3 차례로 찾아 **무엇을
+골랐는지 찍는다.** 조용히 고르면 "왜 안 바뀌지" 로 이어진다.
+
+  .bas  MSX-BASIC 의 PLAY 문. `A$="T85O4..."` 셋이 그대로 PSG 세 채널이다.
+        사람이 쓴 악보라 제일 낫다 - 성부가 셋이고 음이 정확하다.
+  .mml  홑가락 악보. 음은 정확하지만 성부가 하나뿐이라 얇다.
+  .mp3  FFT 로 음을 **알아맞힌다.** 봉우리가 이웃 반음을 오가면 음이 흔들려서
+        HOLD/MIN_FRAMES 로 눌러야 하고, 그만큼 가락이 뭉개진다.
 
 인자는 `파일` 또는 `쓰임=파일` 이다. 쓰임이 곧 asm 의 MUS_<쓰임> 상수라,
 곡을 갈아도 부르는 자리(StartBattle 의 MUS_BATTLE 등)는 안 고쳐도 된다.
@@ -91,6 +96,10 @@ MML_GAP = 1                 # 음과 음 사이에 두는 빈 프레임
 MML_MINGAP = 4              # 이보다 짧은 음은 끊지 않는다 (끊으면 없어진다)
 MML_OCT = 55                # 이 음 위로는 한 옥타브 아래를 겹쳐 두껍게 한다
 MML_OCTVOL = 4              # 겹치는 소리를 얼마나 낮출지 (볼륨 눈금)
+BAS_VOL = 13                # .bas 의 채널마다 주는 볼륨
+#
+# 성부가 셋이라 한꺼번에 울린다. 11 로 재 보니 롬에서 rms 0.040 으로 앞 곡
+# (홑가락, 0.057)보다 작았다. 13 이면 0.081 이고 깎이는 표본은 0 이다.
 
 MML_STEP = {"c": 0, "d": 2, "e": 4, "f": 5, "g": 7, "a": 9, "b": 11}
 
@@ -230,21 +239,19 @@ def hold_min(notes):
     return out
 
 
-def parse_mml(text):
-    """MML 악보 -> ([(MIDI 음 또는 None, 온음표 몫)], 빠르기).
+def mml_tokens(text, up, base, octv=4, deflen=4, tempo=120):
+    """MML 글자열 -> ([(MIDI 음 또는 None, 온음표 몫, 빠르기)], 남은 상태).
 
-    basic pitch 가 뽑아 준 악보를 읽는다. 손으로 쓴 MML 이 아니라 MIDI 를 옮긴
-    것이라 길이가 1/192 까지 잘게 쪼개지고 `^` 로 이어 붙는다 - `e12^e192` 는
-    1/12 + 1/192 짜리 E 하나다.
+    `up` 이 `>` 의 방향(+1 올림 / -1 내림), `base` 가 옥타브 번호를 MIDI 로
+    옮기는 기준이다 (음 = (옥타브 + base) * 12 + 계단). **방언마다 둘 다
+    달라서 인자로 받는다** - 부르는 자리 둘에 왜 그 값인지를 적어 두었다.
+    한 파일 안에 반대 규칙을 둘 박아 두면 나중에 하나를 '고치다가' 깨진다.
 
-    **`>` 가 옥타브를 내린다.** MSX-BASIC 의 PLAY 와 반대인데, 짐작이 아니라
-    옆에 있는 .mid 와 맞대어 본 결과다: `>` 를 올림으로 읽으면 음역이 51~107 이
-    나오고 프레임의 16%만 맞는다. 내림으로 읽으면 35~76 - .mid 와 정확히 같은
-    음역이고 81% 가 맞는다(나머지는 basic pitch 가 겹쳐 낸 음들이다).
+    `^` 는 앞 음에 길이를 더한다. basic pitch 가 뽑은 악보는 MIDI 를 옮긴
+    것이라 `e12^e192` 처럼 1/192 까지 잘게 이어 붙는다.
     """
-    s = re.sub(r"\s+", "", text)
-    i, octv, deflen, tempo = 0, 4, 4, 120
-    out, tie = [], False
+    s = re.sub(r"\s+", "", text).lower()
+    i, out, tie = 0, [], False
     while i < len(s):
         ch = s[i]
         if ch in "tol":                             # 빠르기 / 옥타브 / 기본 길이
@@ -260,10 +267,10 @@ def parse_mml(text):
                 deflen = n
             i = j
         elif ch == ">":
-            octv -= 1
+            octv += up
             i += 1
         elif ch == "<":
-            octv += 1
+            octv -= up
             i += 1
         elif ch == "^":
             tie = True
@@ -284,57 +291,87 @@ def parse_mml(text):
                 add /= 2.0
                 frac += add
                 i += 1
-            note = None if ch == "r" else octv * 12 + MML_STEP[ch] + acc
+            note = None if ch == "r" else (octv + base) * 12 + MML_STEP[ch] + acc
             if tie and out and out[-1][0] == note:
                 out[-1][1] += frac
             else:
-                out.append([note, frac])
+                out.append([note, frac, tempo])
             tie = False
         else:
             i += 1                                  # `;` 등 모르는 글자는 흘린다
-    return out, tempo
+    return out, (octv, deflen, tempo)
 
 
-def mml_frames(spans, tempo):
-    """온음표 몫 -> 프레임 경계 [(음, 시작, 끝)].
+def parse_mml(text):
+    """basic pitch 가 뽑아 준 홑가락 악보.
 
-    **길이를 따로 반올림하지 않고 경계를 반올림한다.** 이 악보에는 1/192
-    짜리(120bpm 에서 0.6 프레임)가 흔해서, 길이마다 따로 반올림하면 0 이 되어
-    사라지고 그 오차가 쌓여 곡 전체가 밀린다. 경계로 재면 짧은 음은 사라지되
-    뒤 음이 그 자리를 물려받아 전체 길이는 안 밀린다.
+    **`>` 가 옥타브를 내린다.** MSX-BASIC 의 PLAY 와 반대인데(parse_bas 를
+    보라), 짐작이 아니라 옆에 있는 .mid 와 맞대어 본 결과다: 올림으로 읽으면
+    음역이 51~107 이 나오고 프레임의 16%만 맞는다. 내림으로 읽으면 35~76 -
+    .mid 와 정확히 같은 음역이고 81% 가 맞는다(나머지는 basic pitch 가 겹쳐
+    낸 음들이다).
+
+    옥타브 기준도 다르다. 여기는 `옥타브 * 12`, MSX-BASIC 은 `(옥타브+1) * 12`
+    (o4 의 C 가 가온다 = 60) 다. 여기서 +1 로 읽으면 한 옥타브가 통째로
+    높아진다 - 이것도 .mid 로 맞췄다.
     """
-    whole = 4.0 * 60.0 / tempo * FPS                # 온음표 하나의 프레임 수
+    ev, _st = mml_tokens(text, -1, 0)
+    return ev
+
+
+def parse_bas(text):
+    """MSX-BASIC 의 PLAY 문 -> 채널 셋.
+
+    `10 A$="T85O4..."` 로 성부를 담고 `40 PLAY A$,B$,C$` 로 튼다. PLAY 는
+    기다리지 않고 큐에 넣기만 하므로, PLAY 가 여러 번이면 채널마다 제 몫이
+    **차례로 이어 붙는다.** 그래서 성부별로 이어 붙이는 것이 맞다.
+
+    **`>` 가 옥타브를 올린다.** 진짜 MSX-BASIC 이라 표준을 따르는데, 이것도
+    재 봤다 - Obsidian_Keep.mp3 에 맞대니 올림이 0.645(음역 35~76, 옆에 있는
+    .mid 와 같다), 내림이 0.510(음역 27~107 로 말이 안 된다)이었다.
+    parse_mml 은 반대다.
+
+    `IF PLAY(0) THEN ...` 같은 줄은 PLAY 문이 아니다 - 성부 이름이 따라오는
+    것만 센다. 안 그러면 빈 마디가 하나 더 생긴다.
+    """
+    cur, secs = {}, []
+    for line in text.split("\n"):
+        m = re.match(r'\s*\d+\s+([ABC])\$\s*=\s*"([^"]*)"', line)
+        if m:
+            cur[m.group(1)] = m.group(2)
+            continue
+        if re.search(r"\bPLAY\s*[A-C]\$", line, re.I):
+            secs.append([cur.get(k, "") for k in "ABC"])
+            cur = {}
+    if not secs:
+        sys.exit("PLAY A$,B$,C$ 를 못 찾았습니다")
+
+    chans = [[], [], []]
+    for sec in secs:
+        for c in range(VOICES):
+            ev, _st = mml_tokens(sec[c], +1, 1)
+            chans[c] += ev
+    return chans
+
+
+def spans_to_frames(spans):
+    """[(음, 온음표 몫, 빠르기)] -> [(음, 시작, 끝)] 과 총 프레임 수.
+
+    **길이를 따로 반올림하지 않고 경계를 반올림한다.** basic pitch 악보에는
+    1/192(120bpm 에서 0.6 프레임)짜리가 흔해서, 길이마다 따로 반올림하면 0 이
+    되어 사라지고 그 오차가 쌓여 곡 전체가 밀린다. 경계로 재면 짧은 음은
+    사라지되 뒤 음이 그 자리를 물려받아 전체 길이는 안 밀린다.
+    """
     t, out = 0.0, []
-    for note, frac in spans:
+    for note, frac, tempo in spans:
         a = int(round(t))
-        t += frac * whole
+        t += frac * 4.0 * 60.0 / tempo * FPS        # 온음표 = 4분음표 넷
         out.append((note, a, int(round(t))))
     return out, int(round(t))
 
 
-def mml_events(spans, tempo):
-    """mml -> events() 와 같은 꼴의 채널 셋. FFT 쪽 다듬기는 거치지 않는다.
-
-    smooth/hold_min/HOLD 는 FFT 가 잘못 짚은 음을 지우는 장치다. 여기서는
-    음이 이미 정확하므로 통과시키면 멀쩡한 가락만 뭉갠다.
-
-    홑가락이라 채널 0 만 쓰면 사각파 하나가 되어 얇다. 가락이 MML_OCT 위로
-    올라가는 동안만 채널 1 에 **한 옥타브 아래를 겹쳐** 둔다. 없는 성부를
-    지어내지 않으면서 소리를 두껍게 하는 흔한 수다.
-    """
-    frames, nf = mml_frames(spans, tempo)
-    ch = [[], [], []]
-    for note, a, b in frames:
-        if b <= a:
-            continue                                # 반올림에 먹힌 음
-        n = b - a
-        gap = MML_GAP if n >= MML_MINGAP else 0     # 짧은 음은 안 끊는다
-        ch[0].append((note, MML_VOL, n - gap, gap))
-        if note is not None and note >= MML_OCT:
-            ch[1].append((note - 12, MML_VOL - MML_OCTVOL, n - gap, gap))
-        else:
-            ch[1].append((None, 0, n - gap, gap))
-
+def pack(ch, nf):
+    """[(음, 볼륨, 울릴 프레임, 쉴 프레임)] 셋 -> 롬에 넣을 사건 목록 셋."""
     ev = []
     for c in range(VOICES):
         runs = []                                   # [[(볼륨, 주기), 프레임]]
@@ -367,7 +404,54 @@ def mml_events(spans, tempo):
                 out.append((vol, p & 0xFF, p >> 8, k))
                 d -= k
         ev.append(out)
-    return ev, nf
+    return ev
+
+
+def voice_cells(spans, vol):
+    """한 성부 -> [(음, 볼륨, 울릴 프레임, 쉴 프레임)]. 음 사이를 살짝 끊는다."""
+    out = []
+    for note, a, b in spans:
+        if b <= a:
+            continue                                # 반올림에 먹힌 음
+        n = b - a
+        gap = MML_GAP if n >= MML_MINGAP else 0     # 짧은 음은 안 끊는다
+        out.append((note, vol, n - gap, gap))
+    return out
+
+
+def mml_events(spans):
+    """홑가락 mml -> 채널 셋. FFT 쪽 다듬기(smooth/hold_min/HOLD)는 안 거친다.
+
+    그것들은 FFT 가 잘못 짚은 음을 지우는 장치다. 여기서는 음이 이미 정확
+    하므로 통과시키면 멀쩡한 가락만 뭉갠다.
+
+    홑가락이라 채널 0 만 쓰면 사각파 하나가 되어 얇다. 가락이 MML_OCT 위로
+    올라가는 동안만 채널 1 에 **한 옥타브 아래를 겹쳐** 둔다. 없는 성부를
+    지어내지 않으면서 소리를 두껍게 하는 흔한 수다.
+    """
+    frames, nf = spans_to_frames(spans)
+    ch = [voice_cells(frames, MML_VOL), [], []]
+    for note, a, b in frames:
+        if b <= a:
+            continue
+        n = b - a
+        gap = MML_GAP if n >= MML_MINGAP else 0
+        if note is not None and note >= MML_OCT:
+            ch[1].append((note - 12, MML_VOL - MML_OCTVOL, n - gap, gap))
+        else:
+            ch[1].append((None, 0, n - gap, gap))
+    return pack(ch, nf), nf
+
+
+def bas_events(chans):
+    """PLAY 세 성부 -> 채널 셋. A$/B$/C$ 가 그대로 PSG 채널 A/B/C 다.
+
+    성부 길이가 서로 다르면 짧은 쪽 뒤가 조용해진다 - MSX 에서도 그렇다.
+    pack() 이 긴 쪽에 맞춰 채운다.
+    """
+    fr = [spans_to_frames(c) for c in chans]
+    nf = max(n for _f, n in fr)
+    return pack([voice_cells(f, BAS_VOL) for f, _n in fr], nf), nf
 
 
 def period(note):
@@ -516,19 +600,44 @@ def emit(songs):
 
 
 def convert(name):
-    """이름 -> (사건 목록, 프레임 수). 무엇을 골랐는지 함께 찍는다."""
-    mml = os.path.join(SRC, name + ".mml")
-    if os.path.exists(mml):
-        spans, tempo = parse_mml(io.open(mml, encoding="utf-8").read())
-        ev, nf = mml_events(spans, tempo)
-        played = [n for n, _ in spans if n is not None]
-        print("%s.mml: %d 프레임 (%.1f 초), t%d, 음 %d 개 (%s ~ %s), "
-              "사건 %s -> %d 바이트"
-              % (name, nf, nf / FPS, tempo, len(played),
+    """이름 -> (사건 목록, 프레임 수). 무엇을 골랐는지 함께 찍는다.
+
+    확장자를 붙여 주면 그것을 쓰고, 안 붙이면 .bas > .mml > .mp3 차례로 찾는다.
+    """
+    stem, _, ext = name.rpartition(".")
+    if ext in ("bas", "mml", "mp3"):
+        cand = [(stem, ext)]
+    else:
+        stem = name
+        cand = [(stem, e) for e in ("bas", "mml", "mp3")]
+    for st, e in cand:
+        path = os.path.join(SRC, "%s.%s" % (st, e))
+        if os.path.exists(path):
+            break
+    else:
+        sys.exit("%s: %s 를 못 찾았습니다"
+                 % (name, " / ".join("%s.%s" % c for c in cand)))
+
+    if e in ("bas", "mml"):
+        text = io.open(path, encoding="utf-8").read()
+        if e == "bas":
+            chans = parse_bas(text)
+            ev, nf = bas_events(chans)
+            played = [n for c in chans for n, _f, _t in c if n is not None]
+            what = "성부 %s" % [sum(1 for n, _f, _t in c if n is not None)
+                                for c in chans]
+        else:
+            spans = parse_mml(text)
+            ev, nf = mml_events(spans)
+            played = [n for n, _f, _t in spans if n is not None]
+            what = "홑가락 %d 음" % len(played)
+        print("%s.%s: %d 프레임 (%.1f 초), %s (%s ~ %s), 사건 %s -> %d 바이트"
+              % (st, e, nf, nf / FPS, what,
                  note_name(min(played)), note_name(max(played)),
                  [len(c) for c in ev], sum(len(c) for c in ev) * 4 + 12))
         return ev, nf
-    x = decode(name)
+
+    x = decode(st)
     midi, E = note_energy(x)
     raw, amps = voices(E, midi)
     notes = hold_min(smooth(raw))

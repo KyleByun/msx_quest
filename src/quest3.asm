@@ -248,11 +248,6 @@ DotLit      ds 1                ; 빨간 점 수
 DotMax      ds 1
 DotWho      ds 1
 HitDmg      ds 1                ; ShowHitNum 이 찍는 중인 피해값
-FlashX      ds 1                ; HitFlash 가 찍는 마름모의 가운데
-FlashY      ds 1
-FlashR      ds 1                ; 지금 그리는 반지름
-FlashDY     ds 1                ; 지금 그리는 줄의 dy (부호 있음)
-FlashRows   ds 1                ; 남은 줄 수
 MonSelCol   ds 1                ; 지금 다루는 칸의 열
 MonSelRow   ds 1                ; 그 칸의 줄
 MonRowX     ds 1                ; 지금 그리는 칸의 왼쪽 끝

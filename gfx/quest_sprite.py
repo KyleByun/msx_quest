@@ -172,9 +172,24 @@ def build_banks(pal, nearest):
                           to_runs_linear(im, pal, nearest), i, size))
     W = H = full
 
+    # 칼질 자국도 여기에 함께 담는다. 그림이라 스프라이트 뱅크가 제 자리고,
+    # **뱅크 사슬을 안 건드려도 된다** - BG_BANK 부터가 SPR_BANKS 로부터
+    # 이어지므로 여기서 뱅크가 하나 늘면 뒤가 저절로 밀린다.
+    slash = []                  # (라벨, 자료, 크기, 몇 번째 장)
+    if BPP == 8:
+        import quest_slash as SL
+        for size in sorted({G.mon_layout(n)[2] for n in range(1, 6)},
+                           reverse=True):
+            W = H = size
+            for k, im in enumerate(SL.frames(size)):
+                slash.append(("SlashW%dF%d" % (size, k),
+                              to_runs_linear(im, pal, nearest), size, k))
+        W = H = full
+
     banks = [[]]
     used = [0]
     place = {}                  # (몬스터 번호, 크기) -> (뱅크 번호, 주소)
+    splace = {}                 # (크기, 장) -> (뱅크 번호, 주소)
     for label, data, i, size in blobs:
         if used[-1] + len(data) > BANK_SIZE:
             banks.append([])
@@ -185,6 +200,18 @@ def build_banks(pal, nearest):
                          % (label, SPRITES[i][1], size, len(data)))
         for k in range(0, len(data), 16):
             banks[bi].append("    db " + ", ".join("0x%02X" % b for b in data[k:k + 16]))
+        used[bi] += len(data)
+
+    for label, data, size, k in slash:
+        if used[-1] + len(data) > BANK_SIZE:
+            banks.append([])
+            used.append(0)
+        bi = len(banks) - 1
+        splace[(size, k)] = (FIRST_BANK + bi, BANK_BASE + used[bi])
+        banks[bi].append("%s:                ; 칼질 %d 픽셀 %d 번째  %d 바이트"
+                         % (label, size, k, len(data)))
+        for j in range(0, len(data), 16):
+            banks[bi].append("    db " + ", ".join("0x%02X" % b for b in data[j:j + 16]))
         used[bi] += len(data)
 
     for bi in range(len(banks)):
@@ -200,6 +227,12 @@ def build_banks(pal, nearest):
         consts.append("SPR_BANK_%d_W%d equ %d                  ; %s %dpx"
                       % (i, size, bk, SPRITES[i][1], size))
         consts.append("SPR_ADDR_%d_W%d equ 0x%04X" % (i, size, ad))
+    if splace:
+        consts.append("SLASH_N      equ %d                  ; 칼질 자국 장 수"
+                      % len({k for _s, k in splace}))
+    for (size, k), (bk, ad) in sorted(splace.items()):
+        consts.append("SLASH_BANK_W%d_F%d equ %d" % (size, k, bk))
+        consts.append("SLASH_ADDR_W%d_F%d equ 0x%04X" % (size, k, ad))
     for bi in range(len(banks)):
         consts.append("; 뱅크 %d: %d / %d 바이트" % (FIRST_BANK + bi, used[bi], BANK_SIZE))
     return banks, consts

@@ -234,6 +234,44 @@ MonSprTab:
     db SPR_BANK_5_W72
     dw SPR_ADDR_5_W72
 
+; 칼질 자국. 색인은 (마릿수-1)*SLASH_N + 장. 크기는 몬스터와 같다.
+SlashTab:
+    ; 1 마리 (72 픽셀)
+    db SLASH_BANK_W72_F0
+    dw SLASH_ADDR_W72_F0
+    db SLASH_BANK_W72_F1
+    dw SLASH_ADDR_W72_F1
+    db SLASH_BANK_W72_F2
+    dw SLASH_ADDR_W72_F2
+    ; 2 마리 (48 픽셀)
+    db SLASH_BANK_W48_F0
+    dw SLASH_ADDR_W48_F0
+    db SLASH_BANK_W48_F1
+    dw SLASH_ADDR_W48_F1
+    db SLASH_BANK_W48_F2
+    dw SLASH_ADDR_W48_F2
+    ; 3 마리 (32 픽셀)
+    db SLASH_BANK_W32_F0
+    dw SLASH_ADDR_W32_F0
+    db SLASH_BANK_W32_F1
+    dw SLASH_ADDR_W32_F1
+    db SLASH_BANK_W32_F2
+    dw SLASH_ADDR_W32_F2
+    ; 4 마리 (24 픽셀)
+    db SLASH_BANK_W24_F0
+    dw SLASH_ADDR_W24_F0
+    db SLASH_BANK_W24_F1
+    dw SLASH_ADDR_W24_F1
+    db SLASH_BANK_W24_F2
+    dw SLASH_ADDR_W24_F2
+    ; 5 마리 (32 픽셀)
+    db SLASH_BANK_W32_F0
+    dw SLASH_ADDR_W32_F0
+    db SLASH_BANK_W32_F1
+    dw SLASH_ADDR_W32_F1
+    db SLASH_BANK_W32_F2
+    dw SLASH_ADDR_W32_F2
+
 ; 마릿수별 배치. gfx/quest_geom.py 의 mon_layout 이 정한 값이다.
 MonSprW:      ; 한 마리의 폭(=높이)
     db 72, 48, 32, 24, 32

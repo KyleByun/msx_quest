@@ -12,6 +12,6 @@ MUS_N        equ 2
 MUS_STRIDE   equ 8                 ; 길이 + 채널 셋의 자리, 워드 넷
 
 MUS_TITLE    equ 0                 ; title
-MUS_BATTLE   equ 1                 ; Obsidian_Keep
+MUS_BATTLE   equ 1                 ; Obsidian_Keep.bas
 
 MUSIC_MAXLEN equ 2824              ; RAM 에 잡아 둘 자리
