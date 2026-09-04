@@ -61,7 +61,9 @@ try {
     # 음악은 **늘** 굽는다. 전투곡은 --title 과 상관없이 울려야 한다.
     # numpy 로 mp3 를 PSG 세 채널로 옮긴다 (결과를 wav 로 들어 볼 수도 있다:
     # gfx/psg_music.py battle --wav).
-    & uv run --with pillow --with numpy python "$PSScriptRoot\gfx\psg_music.py" title battle
+    # `쓰임=파일`. 곡을 갈 때 여기만 고치면 asm 은 MUS_BATTLE 그대로 쓴다.
+    & uv run --with pillow --with numpy python "$PSScriptRoot\gfx\psg_music.py" `
+        title battle=Final_Sector_Pursuit
     if ($LASTEXITCODE -ne 0) { throw "psg_music.py 실패" }
     if ($Title) {
         & uv run --with pillow python "$PSScriptRoot\gfx\quest_title.py"

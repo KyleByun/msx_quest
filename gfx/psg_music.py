@@ -1,7 +1,10 @@
 """mp3 -> PSG 세 채널 악보. assets/psg/*.mp3 를 롬에 넣을 수 있는 형태로 옮긴다.
 
-  uv run --with numpy python gfx/psg_music.py title battle   -> src/quest8music*.asm
+  uv run --with numpy python gfx/psg_music.py title battle=Final_Sector_Pursuit
   uv run --with numpy python gfx/psg_music.py battle --wav   굽지 않고 들어만 본다
+
+인자는 `파일` 또는 `쓰임=파일` 이다. 쓰임이 곧 asm 의 MUS_<쓰임> 상수라,
+곡을 갈아도 부르는 자리(StartBattle 의 MUS_BATTLE 등)는 안 고쳐도 된다.
 
 곡마다 뱅크 하나를 통째로 준다. 둘을 한 뱅크에 넣으면 8KB 를 넘고, 곡이 뱅크
 경계를 넘으면 PsgInit 이 ldir 한 번으로 못 옮긴다.
@@ -58,6 +61,11 @@ BANDS = [(60, 90),          # 0 가락
 # 배음을 깎는 비율. 낮은 음 하나가 옥타브 위(12), 5도 위(19) 자리에도
 # 봉우리를 만들어서, 안 깎으면 위 채널이 베이스의 배음을 가락으로 착각한다.
 HARMONICS = [(12, 0.55), (19, 0.35), (24, 0.25), (28, 0.18)]
+
+# 음을 붙드는 세기. 지금 잡고 있는 음의 에너지가 새 후보의 이 배 이상이면
+# 안 바꾼다. 1.0 이면 늘 바꾸고(옛 동작), 0 이면 영영 안 바꾼다.
+HOLD = 0.55
+MIN_FRAMES = 8              # 이보다 짧은 음은 앞 음에 흡수시킨다 (0.13 초)
 
 VOL_SMOOTH = 9              # 세기를 이만큼의 프레임으로 고른다
 VOL_STEP = 2                # 볼륨 눈금. 잘게 두면 사건의 3/4 이 볼륨 변화가 된다.
@@ -116,6 +124,7 @@ def voices(E, midi):
     n = len(E)
     raw = [[None] * n for _ in range(VOICES)]
     amps = [[0.0] * n for _ in range(VOICES)]
+    held = [None] * VOICES                          # 채널마다 지금 붙들고 있는 음
     for i in range(n):
         e = E[i].copy()
         for c in range(VOICES - 1, -1, -1):         # 베이스부터
@@ -128,7 +137,17 @@ def voices(E, midi):
             j = a + int(np.argmax(seg))
             v = e[j]
             if v < E[i].max() * SILENCE:
+                held[c] = None
                 continue
+            # **붙들기.** 지금 잡고 있는 음이 아직 새 후보에 견줄 만하면 안
+            # 바꾼다. 안 그러면 봉우리가 이웃 반음 칸을 오갈 때마다 음이 따라
+            # 흔들린다 - 소리로는 그것이 가장 크게 들린다.
+            h = held[c]
+            if h is not None:
+                jh = idx.get(h)
+                if jh is not None and a <= jh < b and e[jh] >= v * HOLD:
+                    j, v = jh, float(e[jh])
+            held[c] = int(midi[j])
             raw[c][i] = int(midi[j])
             amps[c][i] = float(v)
             for d, k in HARMONICS:                  # 이 음의 배음을 위에서 깎는다
@@ -154,6 +173,40 @@ def smooth(raw):
                 o.append(None)
             else:
                 o.append(int(np.median(w)))
+        out.append(o)
+    return out
+
+
+def hold_min(notes):
+    """MIN_FRAMES 보다 짧은 음은 앞 음에 흡수시킨다.
+
+    붙들기로도 남는 짧은 음이 있다 - 세기가 정말로 크게 바뀌는 자리다. 그런데
+    0.1 초짜리 음은 가락으로 안 들리고 떨림으로 들리므로, 앞 음을 그만큼 더
+    끌어 준다. 앞이 없으면 뒤에 붙인다.
+    """
+    out = []
+    for ch in notes:
+        runs = []
+        for v in ch:
+            if runs and runs[-1][0] == v:
+                runs[-1][1] += 1
+            else:
+                runs.append([v, 1])
+        i = 0
+        while i < len(runs) and len(runs) > 1:
+            if runs[i][1] >= MIN_FRAMES:
+                i += 1
+                continue
+            if i > 0:
+                runs[i - 1][1] += runs[i][1]
+                del runs[i]
+                i = max(0, i - 1)                   # 늘어난 앞 런을 다시 본다
+            else:
+                runs[1][1] += runs[0][1]
+                del runs[0]
+        o = []
+        for v, k in runs:
+            o += [v] * k
         out.append(o)
     return out
 
@@ -247,6 +300,9 @@ def emit(songs):
 
     L = ["; gfx/psg_music.py 가 만든 파일입니다. 직접 고치지 마세요.",
          ";",
+         "; MUS_* 는 곡의 **쓰임**이지 파일 이름이 아니다. 곡을 갈아도 부르는",
+         "; 자리는 그대로 두려는 것이다.",
+         ";",
          "; 곡마다 뱅크 하나. 음악 뱅크는 타이틀 뱅크 **앞**에 온다 - 전투곡은",
          "; --title 을 안 준 빌드에도 있어야 한다.",
          "",
@@ -260,7 +316,7 @@ def emit(songs):
          "; 곡마다 (길이, 가락 자리, 화음 자리, 베이스 자리).",
          "MusTab:"]
     maxlen = 0
-    for i, (name, ev, frames) in enumerate(songs):
+    for i, (role, name, ev, frames) in enumerate(songs):
         blob = bytearray()
         ofs = []
         for c in range(VOICES):
@@ -284,8 +340,9 @@ def emit(songs):
                      % (name, durs[0], frames))
 
         maxlen = max(maxlen, len(blob))
-        L.append("MUS_%-8s equ %d" % (name.upper(), i))
-        D.append("    ; %s (%d 바이트, %d 프레임)" % (name, len(blob), frames))
+        L.append("MUS_%-8s equ %d                 ; %s.mp3" % (role.upper(), i, name))
+        D.append("    ; %s <- %s (%d 바이트, %d 프레임)"
+                 % (role, name, len(blob), frames))
         D.append("    dw %d, %d, %d, %d" % (len(blob), ofs[0], ofs[1], ofs[2]))
         C.bank_file("quest8", "musicbank", i, blob,
                     "%s.mp3 -> PSG 세 채널 (사건 %s)" % (name, [len(c) for c in ev]))
@@ -304,7 +361,7 @@ def convert(name):
     x = decode(name)
     midi, E = note_energy(x)
     raw, amps = voices(E, midi)
-    notes = smooth(raw)
+    notes = hold_min(smooth(raw))
     ev = events(notes, amps)
 
     total = sum(len(c) for c in ev) * 4 + 12
@@ -323,10 +380,15 @@ def convert(name):
 
 
 def main():
-    names = [a for a in sys.argv[1:] if not a.startswith("--")] or ["title"]
-    songs = [(n,) + convert(n) for n in names]
+    args = [a for a in sys.argv[1:] if not a.startswith("--")] or ["title"]
+    songs = []
+    for a in args:
+        role, _, name = a.partition("=")
+        if not name:
+            name = role                     # `파일` 만 주면 쓰임도 그 이름이다
+        songs.append((role, name) + convert(name))
     if "--wav" in sys.argv:
-        for name, ev, _f in songs:
+        for _role, name, ev, _f in songs:
             p = os.path.join(WORK, name + "_psg.wav")
             render(ev, p)
             print("들어 보기: %s" % p)
