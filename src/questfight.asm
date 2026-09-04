@@ -684,6 +684,9 @@ AskCommand:
     call MenuDraw
 .loop:
     call WaitVBlank
+    IFDEF SCREEN8
+    call PsgTick                ; 명령을 고르는 동안에도 음악이 이어져야 한다
+    ENDIF
     call ReadInput
     ld a, (keyState)            ; 새로 눌린 것만
     ld b, a
@@ -1103,6 +1106,9 @@ ActsFor:
 
 ; 전투를 끝낸다. 몬스터 그림을 지우려면 던전을 다시 그려야 한다.
 EndBattle:
+    IFDEF SCREEN8
+    call PsgStop                ; 안 끄면 던전을 걷는 내내 전투곡이 운다
+    ENDIF
     xor a
     ld (BattleOn), a
     ld a, 1
@@ -1116,6 +1122,10 @@ StartBattle:
     ld a, 1
     ld (BattleOn), a
     ld (RoundNo), a
+    IFDEF SCREEN8
+    ld a, MUS_BATTLE            ; 전투곡. 이미 울리는 중에 불러도 된다.
+    call PsgInit
+    ENDIF
     IFDEF SCREEN8
     xor a                       ; 지난 판의 마지막 한 마리가 남겨 놓은 표시를
     ld (MonDied), a             ; 지운다. 안 지우면 첫 명령에 헛되이 다시 그린다.

@@ -40,8 +40,8 @@ mkdir -p build
 python3 gfx/quest_msg.py
 python3 gfx/quest_gear.py
 python3 gfx/quest_rules.py --bpp 8
+python3 gfx/psg_music.py title battle       # 전투곡은 어느 빌드에나 있다
 [ "$TITLE" = 1 ] && python3 gfx/quest_title.py
-[ "$TITLE" = 1 ] && python3 gfx/psg_music.py title
 
 DEFS=()
 [ "$TITLE" = 1 ] && DEFS+=(-DTITLE)
@@ -52,7 +52,8 @@ DEFS=()
 export LC_ALL=C
 bankFiles=(src/quest8spr*.asm src/quest8bgbank*.asm src/quest8frontbank*.asm src/quest8runbank*.asm)
 # 타이틀 그림은 게임 뱅크 뒤에 붙는다 (TITLE_BANK0 = RUN_BANK0 + RUN_BANKS).
-[ "$TITLE" = 1 ] && bankFiles+=(src/quest8titlebank*.asm src/quest8musicbank*.asm)
+bankFiles+=(src/quest8musicbank*.asm)       # 게임 뒤, 타이틀 앞
+[ "$TITLE" = 1 ] && bankFiles+=(src/quest8titlebank*.asm)
 echo "뱅크 3 부터: ${bankFiles[*]}"
 
 for f in "${bankFiles[@]}"; do

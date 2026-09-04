@@ -22,7 +22,8 @@ TITLE_PIX   equ 256 * TITLE_IMG_H       ; 한 장의 픽셀 수 (= 바이트 수
 ; 타이틀 전체. 마지막 장을 넘기면 돌아간다.
 ;-----------------------------------------------------------------------------
 ShowTitle:
-    call PsgInit                ; 곡을 RAM 으로 옮기고 PSG 를 연다
+    ld a, MUS_TITLE             ; 곡을 RAM 으로 옮기고 PSG 를 연다
+    call PsgInit
     xor a
     ld (titleNo), a
 .each:

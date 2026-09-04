@@ -1,8 +1,14 @@
-; gfx/psg_music.py 가 title.mp3 에서 만든 파일입니다. 직접 고치지 마세요.
+; gfx/psg_music.py 가 만든 파일입니다. 직접 고치지 마세요.
+;
+; 곡마다 뱅크 하나. 음악 뱅크는 타이틀 뱅크 **앞**에 온다 - 전투곡은
+; --title 을 안 준 빌드에도 있어야 한다.
 
-MUSIC_LEN    equ 4048
-MUSIC_CH0    equ 0                ; 가락
-MUSIC_CH1    equ 1756                ; 화음
-MUSIC_CH2    equ 3296                ; 베이스
-MUSIC_BANK   equ TITLE_BANK0 + TITLE_BANKS
+MUSIC_BANKS  equ 2
+MUSIC_BANK   equ RUN_BANK0 + RUN_BANKS
+MUS_N        equ 2
+MUS_STRIDE   equ 8                 ; 길이 + 채널 셋의 자리, 워드 넷
 
+MUS_TITLE    equ 0
+MUS_BATTLE   equ 1
+
+MUSIC_MAXLEN equ 5856              ; RAM 에 잡아 둘 자리

@@ -47,9 +47,9 @@
     IFDEF SCREEN8
     include "src/quest8rules.asm"
     include "src/quest8const.asm"
+    include "src/quest8musicconst.asm"      ; 전투곡이 있어 늘 들어간다
     IFDEF TITLE
     include "src/quest8titleconst.asm"
-    include "src/quest8musicconst.asm"
     ENDIF
     ELSE
     include "src/questrules.asm"
@@ -294,16 +294,21 @@ titleRows   ds 1
 titleY      ds 1
 titleRun    ds 1                ; 이번 RLE 레코드가 쓴 바이트 수
 titleSkip   ds 1                ; 찍는 중에 키를 눌렀나 (남은 글자를 한 번에)
+    ENDIF
 
-; PSG 음악. 채널마다 (지금 읽는 자리, 남은 프레임).
-MusPtr0     ds 2
+; PSG 음악. **--title 과 상관없이 늘 있다** - 전투곡은 어느 빌드에서나 운다.
+MusSong     ds 1                ; 지금 튼 곡 (MUS_TITLE / MUS_BATTLE)
+MusOn       ds 1                ; 울리는 중인가. 0 이면 PsgTick 이 바로 돌아간다.
+MusStart0   ds 2                ; 채널마다 곡의 첫 사건 (되돌 때 쓴다)
+MusStart1   ds 2
+MusStart2   ds 2
+MusPtr0     ds 2                ; 채널마다 지금 읽는 자리
 MusPtr1     ds 2
 MusPtr2     ds 2
-MusLeft0    ds 1
+MusLeft0    ds 1                ; 채널마다 남은 프레임
 MusLeft1    ds 1
 MusLeft2    ds 1
 MusVol      ds 1
-    ENDIF
 
 ; 지도 표시
 MapOn       ds 1                ; 0=양피지, 그 외=미니맵
@@ -457,6 +462,7 @@ Init:
 ;-----------------------------------------------------------------------------
 MainLoop:
     call WaitVBlank
+    call PsgTick                ; 음악이 꺼져 있으면 바로 돌아간다
     ld a, (needDraw)
     or a
     jr z, .idle
@@ -1931,9 +1937,10 @@ WriteVdpReg:
     ENDIF
     include "src/questlevel.asm"
     include "src/questmap.asm"
+    include "src/questpsg.asm"
+    include "src/quest8musicdata.asm"
     IFDEF TITLE
     include "src/questtitle.asm"
-    include "src/questpsg.asm"
     include "src/quest8titledata.asm"
     ENDIF
     include "src/questgear.asm"

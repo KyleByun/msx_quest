@@ -1,8 +1,10 @@
 """mp3 -> PSG 세 채널 악보. assets/psg/*.mp3 를 롬에 넣을 수 있는 형태로 옮긴다.
 
-  uv run --with numpy python gfx/psg_music.py title          -> src/quest8music*.asm
-                                                               (--title 빌드가 부른다)
-  uv run --with numpy python gfx/psg_music.py title --wav    + 들어 볼 수 있는 wav
+  uv run --with numpy python gfx/psg_music.py title battle   -> src/quest8music*.asm
+  uv run --with numpy python gfx/psg_music.py battle --wav   굽지 않고 들어만 본다
+
+곡마다 뱅크 하나를 통째로 준다. 둘을 한 뱅크에 넣으면 8KB 를 넘고, 곡이 뱅크
+경계를 넘으면 PsgInit 이 ldir 한 번으로 못 옮긴다.
 
 원곡은 동시에 네댓 음이 울리는 꽉 찬 편곡이고 PSG 는 사각파 셋뿐이라, 옮기는
 것이 아니라 **줄여서 다시 쓰는** 일이다. 그래서 결과를 wav 로 되돌려 들어 보고
@@ -230,44 +232,75 @@ def render(ev, path):
     w.close()
 
 
-def emit(name, ev):
-    """롬에 들어갈 자료와 상수.
+def emit(songs):
+    """롬에 들어갈 자료와 상수. songs = [(이름, 사건목록, 프레임수), ...]
 
     곡은 **뱅크에 두고 시작할 때 RAM 으로 옮긴다.** 본체(0x4000-0x9FFF)에 두면
     한 곡에 4KB 를 먹고, 0xA000 창에 둔 채로 읽으면 그림을 푸는 동안 창을 서로
     뺏는다(음악은 그림을 푸는 중에도 계속 울려야 한다). RAM 은 RamEnd 위로
     0xC940~0xF380 이 비어 있어 넉넉하다.
+
+    곡마다 뱅크 하나를 준다 - 두 곡을 한 뱅크에 이어 붙이면 8KB 를 넘고, 곡이
+    경계를 넘으면 옮기는 동안 뱅크를 갈아 끼워야 한다.
     """
     import quest_convert as C
 
-    blob = bytearray()
-    ofs = []
-    for c in range(VOICES):
-        ofs.append(len(blob))
-        for vol, plo, phi, dur in ev[c]:
-            blob += bytes([vol, plo, phi, dur])
-        blob += b"\x00\x00\x00\x00"                 # 끝
-    if len(blob) > C.BANK_SIZE:
-        sys.exit("곡이 %d 바이트다. 뱅크 하나(%d)에 들어가야 한다 - 곡을 줄이거나\n"
-                 "  여러 뱅크에 걸치게 고쳐야 한다." % (len(blob), C.BANK_SIZE))
+    L = ["; gfx/psg_music.py 가 만든 파일입니다. 직접 고치지 마세요.",
+         ";",
+         "; 곡마다 뱅크 하나. 음악 뱅크는 타이틀 뱅크 **앞**에 온다 - 전투곡은",
+         "; --title 을 안 준 빌드에도 있어야 한다.",
+         "",
+         "MUSIC_BANKS  equ %d" % len(songs),
+         "MUSIC_BANK   equ RUN_BANK0 + RUN_BANKS",
+         "MUS_N        equ %d" % len(songs),
+         "MUS_STRIDE   equ 8                 ; 길이 + 채널 셋의 자리, 워드 넷",
+         ""]
+    D = ["; gfx/psg_music.py 가 만든 파일입니다. 직접 고치지 마세요.",
+         "",
+         "; 곡마다 (길이, 가락 자리, 화음 자리, 베이스 자리).",
+         "MusTab:"]
+    maxlen = 0
+    for i, (name, ev, frames) in enumerate(songs):
+        blob = bytearray()
+        ofs = []
+        for c in range(VOICES):
+            ofs.append(len(blob))
+            for vol, plo, phi, dur in ev[c]:
+                blob += bytes([vol, plo, phi, dur])
+            blob += b"\x00\x00\x00\x00"             # 끝
+        if len(blob) > C.BANK_SIZE:
+            sys.exit("%s 가 %d 바이트다. 한 곡이 뱅크 하나(%d)에 들어가야 한다."
+                     % (name, len(blob), C.BANK_SIZE))
 
-    Cc = ["; gfx/psg_music.py 가 %s.mp3 에서 만든 파일입니다. 직접 고치지 마세요." % name,
-          "",
-          "MUSIC_LEN    equ %d" % len(blob),
-          "MUSIC_CH0    equ %d                ; 가락" % ofs[0],
-          "MUSIC_CH1    equ %d                ; 화음" % ofs[1],
-          "MUSIC_CH2    equ %d                ; 베이스" % ofs[2],
-          "MUSIC_BANK   equ TITLE_BANK0 + TITLE_BANKS",
-          ""]
+        # 채널 셋의 총 길이가 같아야 한다. 곡 끝에서 채널마다 따로 처음으로
+        # 돌아가는데(PsgChan), 길이가 다르면 돌 때마다 어긋나 화음이 깨진다.
+        durs = [sum(e[3] for e in ev[c]) for c in range(VOICES)]
+        if len(set(durs)) != 1:
+            sys.exit("%s 의 채널 길이가 다르다: %s 프레임.\n"
+                     "  곡 끝에서 되돌 때 어긋난다 - events() 를 보세요."
+                     % (name, durs))
+        if durs[0] != frames:
+            sys.exit("%s 의 채널 길이 %d 가 잰 프레임 수 %d 와 다르다."
+                     % (name, durs[0], frames))
+
+        maxlen = max(maxlen, len(blob))
+        L.append("MUS_%-8s equ %d" % (name.upper(), i))
+        D.append("    ; %s (%d 바이트, %d 프레임)" % (name, len(blob), frames))
+        D.append("    dw %d, %d, %d, %d" % (len(blob), ofs[0], ofs[1], ofs[2]))
+        C.bank_file("quest8", "musicbank", i, blob,
+                    "%s.mp3 -> PSG 세 채널 (사건 %s)" % (name, [len(c) for c in ev]))
+
+    L.append("")
+    L.append("MUSIC_MAXLEN equ %d              ; RAM 에 잡아 둘 자리" % maxlen)
     io.open(os.path.join(ROOT, "src", "quest8musicconst.asm"), "w",
-            encoding="utf-8", newline="\n").write("\n".join(Cc) + "\n")
-    C.bank_file("quest8", "musicbank", 0, blob,
-                "%s.mp3 -> PSG 세 채널 (사건 %s)" % (name, [len(c) for c in ev]))
-    return len(blob)
+            encoding="utf-8", newline="\n").write("\n".join(L) + "\n")
+    io.open(os.path.join(ROOT, "src", "quest8musicdata.asm"), "w",
+            encoding="utf-8", newline="\n").write("\n".join(D) + "\n")
+    return maxlen
 
 
-def main():
-    name = sys.argv[1] if len(sys.argv) > 1 else "title"
+def convert(name):
+    """이름 -> (사건 목록, 프레임 수). 무엇을 골랐는지 함께 찍는다."""
     x = decode(name)
     midi, E = note_energy(x)
     raw, amps = voices(E, midi)
@@ -286,14 +319,21 @@ def main():
                   % (c, ("가락", "화음", "베이스")[c], len(ev[c]),
                      note_name(int(round(69 + 12 * np.log2(min(f) / 440)))),
                      note_name(int(round(69 + 12 * np.log2(max(f) / 440))))))
+    return ev, len(E)
+
+
+def main():
+    names = [a for a in sys.argv[1:] if not a.startswith("--")] or ["title"]
+    songs = [(n,) + convert(n) for n in names]
     if "--wav" in sys.argv:
-        p = os.path.join(WORK, name + "_psg.wav")
-        render(ev, p)
-        print("들어 보기: %s" % p)
-    else:
-        n = emit(name, ev)
-        print("wrote src/quest8musicconst.asm + src/quest8musicbank00.asm (%d 바이트)"
-              % n)
+        for name, ev, _f in songs:
+            p = os.path.join(WORK, name + "_psg.wav")
+            render(ev, p)
+            print("들어 보기: %s" % p)
+        return
+    n = emit(songs)
+    print("wrote src/quest8musicconst.asm + quest8musicdata.asm + 뱅크 %d 개 "
+          "(가장 큰 곡 %d 바이트)" % (len(songs), n))
 
 
 if __name__ == "__main__":

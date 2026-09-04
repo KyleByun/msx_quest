@@ -12,4 +12,4 @@ TITLE_BANKS  equ 13
 TITLE_LINE_N equ 12
 
 ; 그림 뱅크는 게임 뱅크 **뒤**에 붙는다. 게임 쪽 마지막이 벽면 런이다.
-TITLE_BANK0  equ RUN_BANK0 + RUN_BANKS
+TITLE_BANK0  equ MUSIC_BANK + MUSIC_BANKS

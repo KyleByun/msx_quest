@@ -58,13 +58,14 @@ try {
         & uv run --with pillow python "$PSScriptRoot\gfx\$($g[0])" @($g | Select-Object -Skip 1)
         if ($LASTEXITCODE -ne 0) { throw "$($g[0]) 실패" }
     }
+    # 음악은 **늘** 굽는다. 전투곡은 --title 과 상관없이 울려야 한다.
+    # numpy 로 mp3 를 PSG 세 채널로 옮긴다 (결과를 wav 로 들어 볼 수도 있다:
+    # gfx/psg_music.py battle --wav).
+    & uv run --with pillow --with numpy python "$PSScriptRoot\gfx\psg_music.py" title battle
+    if ($LASTEXITCODE -ne 0) { throw "psg_music.py 실패" }
     if ($Title) {
-        # 타이틀 그림과 배경음. 음악은 numpy 로 mp3 를 PSG 세 채널로 옮긴다
-        # (gfx/psg_music.py - 결과를 wav 로 들어 볼 수도 있다).
         & uv run --with pillow python "$PSScriptRoot\gfx\quest_title.py"
         if ($LASTEXITCODE -ne 0) { throw "quest_title.py 실패" }
-        & uv run --with pillow --with numpy python "$PSScriptRoot\gfx\psg_music.py" title
-        if ($LASTEXITCODE -ne 0) { throw "psg_music.py 실패" }
     }
 
     $defs = @()
@@ -77,13 +78,13 @@ try {
     $bankFiles = @(Get-ChildItem "src/quest8spr*.asm"       | Sort-Object Name) +
                  @(Get-ChildItem "src/quest8bgbank*.asm"    | Sort-Object Name) +
                  @(Get-ChildItem "src/quest8frontbank*.asm" | Sort-Object Name) +
-                 @(Get-ChildItem "src/quest8runbank*.asm"   | Sort-Object Name)
+                 @(Get-ChildItem "src/quest8runbank*.asm"   | Sort-Object Name) +
+                 # 음악은 게임 뱅크 **뒤, 타이틀 앞**이다
+                 # (MUSIC_BANK = RUN_BANK0 + RUN_BANKS 와 같은 차례여야 한다).
+                 @(Get-ChildItem "src/quest8musicbank*.asm" | Sort-Object Name)
     if ($Title) {
-        # 타이틀 그림은 게임 뱅크 **뒤**에 붙는다 (quest8titleconst.asm 의
-        # TITLE_BANK0 = RUN_BANK0 + RUN_BANKS 와 같은 차례여야 한다).
+        # 타이틀 그림은 그 뒤 (TITLE_BANK0 = MUSIC_BANK + MUSIC_BANKS).
         $bankFiles += @(Get-ChildItem "src/quest8titlebank*.asm" | Sort-Object Name)
-        # 음악은 그림 뱅크 **뒤**에 붙는다 (MUSIC_BANK = TITLE_BANK0 + TITLE_BANKS 와 같은 차례여야 한다).
-        $bankFiles += @(Get-ChildItem "src/quest8musicbank*.asm" | Sort-Object Name)
     }
     foreach ($f in $bankFiles) {
         & $SJASMPLUS --msg=war $f.FullName

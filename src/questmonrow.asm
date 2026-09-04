@@ -380,6 +380,7 @@ PickTarget:
     call ShowArrow
 .loop:
     call WaitVBlank
+    call PsgTick                ; 상대를 고르는 동안에도 음악이 이어져야 한다
     call ReadInput
     ld a, (keyState)            ; 새로 눌린 것만
     ld b, a

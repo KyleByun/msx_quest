@@ -132,7 +132,7 @@ def main():
           "TITLE_LINE_N equ %d" % n,
           "",
           "; 그림 뱅크는 게임 뱅크 **뒤**에 붙는다. 게임 쪽 마지막이 벽면 런이다.",
-          "TITLE_BANK0  equ RUN_BANK0 + RUN_BANKS",
+          "TITLE_BANK0  equ MUSIC_BANK + MUSIC_BANKS",
           ]
 
     D = ["; gfx/quest_title.py 가 생성한 파일입니다. 직접 고치지 마세요.",
